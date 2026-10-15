@@ -1,0 +1,22 @@
+// NXT example: motor A runs only while the touch sensor on port 1 is pressed.
+// Uses the raw value: about 1023 = released, below 500 = pressed.
+task main()
+{
+    SetSensorTouch(IN_1);
+    Wait(500);                         // let the sensor settle
+
+    bool wasPressed = false;
+
+    while (true)
+    {
+        bool pressed = (SensorRaw(IN_1) < 500);
+
+        if (pressed && !wasPressed)
+            OnFwd(OUT_A, 75);          // just pressed: start the motor
+        if (!pressed && wasPressed)
+            Off(OUT_A);                // just released: stop the motor
+
+        wasPressed = pressed;
+        Wait(20);
+    }
+}

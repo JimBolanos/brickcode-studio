@@ -39,7 +39,7 @@
 #include <stdlib.h>
 
 #define APP_NAME     "BrickCode Studio"
-#define APP_VERSION  "2.0"
+#define APP_VERSION  "2.0.1"
 
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
@@ -1447,6 +1447,8 @@ static void pack_name(guint8 *dest, const char *name) {
 #define SYS_OPEN_WRITE 0x81
 #define SYS_WRITE      0x83
 #define DIRECT_START_PROGRAM 0x00
+#define DIRECT_STOP_PROGRAM  0x01
+#define DIRECT_SET_OUTPUT_STATE 0x04
 
 static gboolean nxt_upload(const char *path, gboolean run, char **err) {
     char *data = NULL;
@@ -1457,7 +1459,14 @@ static gboolean nxt_upload(const char *path, gboolean run, char **err) {
         g_error_free(ge);
         return FALSE;
     }
-    char *name = g_path_get_basename(path);
+    /* The NXT allows at most 15 characters plus the extension in a file name.
+     * Cut the base name, never the ".rxe" at the end. */
+    char *base = g_path_get_basename(path);
+    char *dot = strrchr(base, '.');
+    if (dot) *dot = '\0';
+    if (strlen(base) > 15) base[15] = '\0';
+    char *name = g_strconcat(base, ".rxe", NULL);
+    g_free(base);
 
     libusb_context *ctx = NULL;
     libusb_init(&ctx);
@@ -1468,16 +1477,44 @@ static gboolean nxt_upload(const char *path, gboolean run, char **err) {
     }
 
     guint8 req[64], rep[64];
-    memset(req, 0, sizeof(req));
-    req[0] = CMD_SYSTEM_REPLY; req[1] = SYS_DELETE;
-    pack_name(req + 2, name);
-    nxt_transact(h, req, 22, rep, sizeof(rep));          /* failure is fine */
 
-    memset(req, 0, sizeof(req));
-    req[0] = CMD_SYSTEM_REPLY; req[1] = SYS_OPEN_WRITE;
-    pack_name(req + 2, name);
-    req[22] = size; req[23] = size >> 8; req[24] = size >> 16; req[25] = size >> 24;
-    if (!nxt_transact(h, req, 26, rep, sizeof(rep)) || rep[2] != 0) {
+    /* A program from a previous run may still be going (for example a
+     * while(true) loop) and may still hold the motors. Stop it and turn
+     * all motors off, so the new program starts from a clean state. */
+    if (run) {
+        memset(req, 0, sizeof(req));
+        req[0] = CMD_DIRECT_REPLY; req[1] = DIRECT_STOP_PROGRAM;
+        nxt_transact(h, req, 2, rep, sizeof(rep));       /* may say "no program" */
+        memset(req, 0, sizeof(req));
+        req[0] = CMD_DIRECT_REPLY; req[1] = DIRECT_SET_OUTPUT_STATE;
+        req[2] = 0xFF;                                   /* all ports, mode 0 = off */
+        nxt_transact(h, req, 12, rep, sizeof(rep));
+        g_usleep(300000);
+    }
+
+    /* Delete the old copy and open the new file. If the NXT says the file
+     * still exists or is busy, stop whatever is running and try again. */
+    gboolean opened = FALSE;
+    for (int attempt = 0; attempt < 4 && !opened; attempt++) {
+        if (attempt > 0) {
+            memset(req, 0, sizeof(req));
+            req[0] = CMD_DIRECT_REPLY; req[1] = DIRECT_STOP_PROGRAM;
+            nxt_transact(h, req, 2, rep, sizeof(rep));
+            g_usleep(500000);
+        }
+        memset(req, 0, sizeof(req));
+        req[0] = CMD_SYSTEM_REPLY; req[1] = SYS_DELETE;
+        pack_name(req + 2, name);
+        nxt_transact(h, req, 22, rep, sizeof(rep));      /* failure is fine */
+
+        memset(req, 0, sizeof(req));
+        req[0] = CMD_SYSTEM_REPLY; req[1] = SYS_OPEN_WRITE;
+        pack_name(req + 2, name);
+        req[22] = size; req[23] = size >> 8; req[24] = size >> 16; req[25] = size >> 24;
+        if (nxt_transact(h, req, 26, rep, sizeof(rep)) && rep[2] == 0)
+            opened = TRUE;
+    }
+    if (!opened) {
         *err = g_strdup_printf(T("NXT refused the file (status 0x%02X)."), rep[2]);
         goto fail;
     }

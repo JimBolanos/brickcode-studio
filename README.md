@@ -43,7 +43,7 @@ The RCX needs its firmware once: gear button → Brick utilities → pick
 
 ## Examples
 
-See the [`examples`](examples) folder: `forward_and_back.nqc` (RCX / Scout) and `forward_and_back.nxc` (NXT).
+See the [`examples`](examples) folder: `forward_and_back.nqc` (RCX / Scout), `forward_and_back.nxc` and `touch_sensor_motor.nxc` (NXT).
 
 ## Español
 
