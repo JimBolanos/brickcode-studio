@@ -51,6 +51,16 @@ BrickCode Studio es un editor nativo para programar ladrillos clásicos: **NQC**
 Escribe el programa, pulsa **F5** y se compila, se descarga y se ejecuta en el ladrillo.
 La interfaz está en inglés y español (selector en la barra superior). La instalación es la misma de arriba.
 
+## About me / Acerca de mí
+
+Hi, I'm **Jim Bolaños**. I build and program LEGO robots as a hobby (RCX, Scout, NXT and Powered Up hubs) and I write about them on my blog.
+I made BrickCode Studio so these classic bricks can keep running on modern computers: one editor, no old drivers, on Linux and macOS.
+If you find a bug or have an idea, open an issue here or find me at [github.com/JimBolanos](https://github.com/JimBolanos). My builds are on [Rebrickable](https://rebrickable.com/users/jimmy.bolanos/).
+
+Hola, soy **Jim Bolaños**. Programo robots de LEGO como pasatiempo (RCX, Scout, NXT y hubs Powered Up) y escribo sobre ellos en mi blog.
+Creé BrickCode Studio para que estos ladrillos clásicos sigan funcionando en computadoras modernas: un solo editor, sin drivers viejos, en Linux y macOS.
+Si encuentras un error o tienes una idea, abre un issue aquí o búscame en [github.com/JimBolanos](https://github.com/JimBolanos). Mis creaciones están en [Rebrickable](https://rebrickable.com/users/jimmy.bolanos/).
+
 ## Notes
 
 - nbc is built compile-only; sending the program to the NXT is done by the app itself.
