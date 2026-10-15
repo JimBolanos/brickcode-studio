@@ -1,0 +1,5 @@
+brickcode-studio/brickcode-studio
+*.o
+pkg/
+src/
+*.pkg.tar.*

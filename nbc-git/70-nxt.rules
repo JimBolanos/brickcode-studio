@@ -1,0 +1,3 @@
+# NXT (LEGO Mindstorms) USB access for the currently logged-in session,
+# via systemd-logind's uaccess mechanism (no group membership needed).
+SUBSYSTEM=="usb", ATTR{idVendor}=="0694", TAG+="uaccess"

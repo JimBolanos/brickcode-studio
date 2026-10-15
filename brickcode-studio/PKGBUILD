@@ -1,0 +1,37 @@
+# Maintainer: Jim Bolaños
+pkgname=brickcode-studio
+pkgver=2.0.0
+pkgrel=1
+pkgdesc="Native GTK4 editor for NQC (RCX/Scout) and NXC (NXT) programming"
+arch=('x86_64')
+url="https://github.com/JimBolanos/brickcode-studio"
+license=('MIT')
+depends=('gtk4' 'libusb' 'nbc-git')
+makedepends=('gcc' 'pkgconf')
+optdepends=('nqc: needed for NQC mode (RCX, Scout, CyberMaster, Spybotics)')
+conflicts=('lego-brick-ide' 'nxc-ide' 'classicbrick-studio')
+replaces=('lego-brick-ide' 'nxc-ide' 'classicbrick-studio')
+source=("brickcode-studio.c" "nqc_tables.inc" "i18n_es.inc"
+        "brickcode-studio.desktop" "brickcode-studio.svg"
+        icon-48.png icon-64.png icon-128.png icon-256.png icon-512.png)
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+build() {
+    cd "$srcdir"
+    gcc $(pkg-config --cflags gtk4 libusb-1.0) -O2 -o brickcode-studio \
+        brickcode-studio.c $(pkg-config --libs gtk4 libusb-1.0)
+}
+
+package() {
+    cd "$srcdir"
+    install -Dm755 brickcode-studio "$pkgdir/usr/bin/brickcode-studio"
+    install -Dm644 brickcode-studio.desktop \
+        "$pkgdir/usr/share/applications/brickcode-studio.desktop"
+    install -Dm644 brickcode-studio.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/brickcode-studio.svg"
+    for s in 48 64 128 256 512; do
+        install -Dm644 icon-$s.png \
+            "$pkgdir/usr/share/icons/hicolor/${s}x${s}/apps/brickcode-studio.png"
+    done
+    install -Dm644 icon-128.png "$pkgdir/usr/share/pixmaps/brickcode-studio.png"
+}

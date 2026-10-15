@@ -1,0 +1,37 @@
+# Maintainer: Jim Bolaños
+pkgname=nbc-git
+pkgver=r7.23332f8
+pkgrel=2
+pkgdesc="NBC/NXC compiler for the LEGO Mindstorms NXT (John Hansen's compiler, Linux-modernized fork by pierre-24)"
+arch=('x86_64')
+url="https://github.com/pierre-24/nbc-compiler"
+license=('GPL2')
+depends=('libusb-compat')
+makedepends=('git' 'fpc' 'make')
+provides=('nbc')
+conflicts=('nbc')
+source=("nbc-compiler::git+https://github.com/pierre-24/nbc-compiler.git"
+        "70-nxt.rules")
+sha256sums=('SKIP'
+            'SKIP')
+
+pkgver() {
+    cd "$srcdir/nbc-compiler"
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cd "$srcdir/nbc-compiler"
+    make all
+}
+
+package() {
+    cd "$srcdir/nbc-compiler"
+    install -Dm755 nbc "$pkgdir/usr/bin/nbc"
+    # NXC headers: BrickCode Studio passes this folder to nbc with -I=
+    for h in NBCCommon.h NXCDefs.h NXTDefs.h; do
+        install -Dm644 "$(find . -name "$h" | head -1)" "$pkgdir/usr/include/nbc/$h"
+    done
+    install -Dm644 "$srcdir/70-nxt.rules" \
+        "$pkgdir/usr/lib/udev/rules.d/70-nxt.rules"
+}

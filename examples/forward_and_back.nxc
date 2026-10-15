@@ -1,0 +1,16 @@
+// NXT example: motors B and C forward, then back, with text on the screen.
+task main()
+{
+    TextOut(0, LCD_LINE1, "Moving...");
+
+    OnFwd(OUT_BC, 50);
+    Wait(2000);             // milliseconds
+
+    OnRev(OUT_BC, 50);
+    Wait(2000);
+
+    Off(OUT_BC);
+    ClearScreen();
+    TextOut(0, LCD_LINE1, "Done");
+    Wait(1000);
+}

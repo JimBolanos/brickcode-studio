@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=BrickCode Studio
+Comment=NQC and NXC editor for the RCX, Scout and NXT
+Exec=brickcode-studio
+Icon=brickcode-studio
+Terminal=false
+Categories=Development;IDE;Education;
+Keywords=Mindstorms;NQC;NXC;RCX;NXT;
+StartupWMClass=org.brickcode.Studio
