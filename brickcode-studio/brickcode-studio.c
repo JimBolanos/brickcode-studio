@@ -39,7 +39,7 @@
 #include <stdlib.h>
 
 #define APP_NAME     "BrickCode Studio"
-#define APP_VERSION  "2.0.1"
+#define APP_VERSION  "2.0.2"
 
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
@@ -205,13 +205,13 @@ static const ModeInfo MODES[] = {
 };
 
 /* The -T targets, verbatim from nqc. RCX2 is nqc's own default. */
-static const struct { const char *name; const char *desc; } NQC_TARGETS[] = {
-    { "RCX2",  "RCX 2.0 — firmware 0328 or newer (nqc default)" },
-    { "RCX",   "RCX 1.0 — older firmware" },
-    { "CM",    "CyberMaster" },
-    { "Scout", "Scout" },
-    { "Spy",   "Spybotics" },
-    { "Swan",  "Swan" },
+static const struct { const char *name; const char *label; const char *desc; } NQC_TARGETS[] = {
+    { "RCX2",  "RCX2 (firm0328.lgo)", "RCX 2.0 — firmware 0328 or newer (nqc default)" },
+    { "RCX",   "RCX (firm0309.lgo)",  "RCX 1.0 — older firmware" },
+    { "CM",    "CM",                  "CyberMaster" },
+    { "Scout", "Scout",               "Scout" },
+    { "Spy",   "Spy",                 "Spybotics" },
+    { "Swan",  "Swan (fast####.lgo)", "Swan — Dick Swan's fast firmware (not every fast firmware works with nqc)" },
 };
 
 /* Where the RCX tower shows up on Linux. */
@@ -766,14 +766,16 @@ static char *detect_port(char **reason) {
         g_free(where);
         return found;
     }
+    /* nqc only treats a port as USB when its name starts with "usb"; a plain
+     * /dev/usb/legousbtower0 path is taken as a serial tower and fails. */
     for (int i = 0; TOWER_DEVICES[i]; i++) {
         if (g_file_test(TOWER_DEVICES[i], G_FILE_TEST_EXISTS)) {
-            *reason = g_strdup("found the device node");
-            return g_strdup(TOWER_DEVICES[i]);
+            *reason = g_strdup("found the tower device node, nqc will use USB");
+            return g_strdup("usb");
         }
     }
-    *reason = g_strdup("nqc default");
-    return g_strdup("");
+    *reason = g_strdup("USB tower (type a serial port by hand for a serial tower)");
+    return g_strdup("usb");
 }
 
 static void port_diagnosis(AppState *st, const char *port) {
@@ -1297,6 +1299,36 @@ static void nqc_sleep_cb(GtkButton *btn, gpointer user_data) {
     g_free(minutes);
 }
 
+/* Test tools: is each compiler in the PATH, and does it start? */
+static void report_tool(AppState *st, const char *tool, const char *flag) {
+    char msg[500];
+    char *path = g_find_program_in_path(tool);
+    if (!path) {
+        snprintf(msg, sizeof(msg), T("%s: NOT found in PATH."), tool);
+        log_output(st, msg, "err");
+        return;
+    }
+    char *argv[] = { path, (char *)flag, NULL };
+    char *out = NULL, *errs = NULL;
+    gboolean ok = g_spawn_sync(NULL, argv, NULL, G_SPAWN_DEFAULT, NULL, NULL,
+                               &out, &errs, NULL, NULL);
+    const char *text = (out && *out) ? out : errs;
+    char *first = g_strdup(text ? text : "");
+    char *nl = strchr(first, '\n');
+    if (nl) *nl = 0;
+    snprintf(msg, sizeof(msg), ok ? T("%s: found at %s") : T("%s: found at %s but did not start"),
+             tool, path);
+    log_output(st, msg, ok ? "info" : "err");
+    if (*first) log_output(st, first, "dim");
+    g_free(first); g_free(out); g_free(errs); g_free(path);
+}
+
+static void test_tools_cb(GtkButton *btn, gpointer user_data) {
+    AppState *st = user_data;
+    report_tool(st, NQC_CMD, "-help");
+    report_tool(st, NBC_CMD, "-help");
+}
+
 static void firmware_cb(GtkButton *btn, gpointer user_data) {
     AppState *st = user_data;
     const char *path = gtk_editable_get_text(GTK_EDITABLE(st->fw_entry));
@@ -1641,6 +1673,43 @@ static void explorer_connect_cb(GtkButton *btn, gpointer user_data) {
     }
     gtk_label_set_text(GTK_LABEL(ex->info_label), info);
     explorer_refresh(ex);
+}
+
+/* Test brick: ask the brick something and show its answer. */
+static void test_brick_cb(GtkButton *btn, gpointer user_data) {
+    AppState *st = user_data;
+    if (st->mode == MODE_NQC) {
+        GPtrArray *args = g_ptr_array_new();
+        g_ptr_array_add(args, "-getversion");
+        run_nqc(st, args, TIMEOUT_DEFAULT, "The brick answered.", "Asking the brick…");
+        g_ptr_array_free(args, TRUE);
+        return;
+    }
+    libusb_context *ctx = NULL;
+    if (libusb_init(&ctx) != 0) { log_output(st, "libusb could not start.", "err"); return; }
+    libusb_device_handle *h = nxt_usb_open(ctx);
+    if (!h) {
+        log_output(st, "NXT not found. Check the USB cable, that it is powered on, "
+                       "and the USB permissions (udev rule 70-nxt.rules).", "err");
+        libusb_exit(ctx);
+        return;
+    }
+    guint8 breq[2] = { CMD_DIRECT_REPLY, DIRECT_GET_BATTERY_LEVEL }, brep[6];
+    guint8 freq[2] = { CMD_SYSTEM_REPLY, SYS_GET_FIRMWARE_VERSION }, frep[8];
+    char msg[200];
+    if (nxt_transact(h, breq, 2, brep, sizeof(brep)) && brep[2] == 0) {
+        snprintf(msg, sizeof(msg), T("The NXT answered: battery %d mV"), brep[3] | (brep[4] << 8));
+        log_output(st, msg, "info");
+    } else {
+        log_output(st, "The NXT is there but did not answer.", "err");
+    }
+    if (nxt_transact(h, freq, 2, frep, sizeof(frep)) && frep[2] == 0) {
+        snprintf(msg, sizeof(msg), T("NXT firmware %d.%d"), frep[6], frep[5]);
+        log_output(st, msg, "info");
+    }
+    libusb_release_interface(h, 0);
+    libusb_close(h);
+    libusb_exit(ctx);
 }
 
 static void explorer_delete_cb(GtkButton *btn, gpointer user_data) {
@@ -2749,7 +2818,7 @@ static void activate(GtkApplication *app, gpointer user_data) {
     st->nqc_settings = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
     const char *target_names[G_N_ELEMENTS(NQC_TARGETS) + 1];
     for (guint i = 0; i < G_N_ELEMENTS(NQC_TARGETS); i++)
-        target_names[i] = NQC_TARGETS[i].name;
+        target_names[i] = NQC_TARGETS[i].label;
     target_names[G_N_ELEMENTS(NQC_TARGETS)] = NULL;
     st->target_dropdown = gtk_drop_down_new_from_strings(target_names);
     gtk_widget_add_css_class(st->target_dropdown, "settings-dd");
@@ -2815,6 +2884,10 @@ static void activate(GtkApplication *app, gpointer user_data) {
     st->utils_nxc = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     gtk_box_append(GTK_BOX(st->utils_nxc),
         chip_button("NXT Explorer", "qa-purple", G_CALLBACK(open_explorer_cb), st));
+    gtk_box_append(GTK_BOX(st->utils_nxc),
+        chip_button("Test tools", "qa-green", G_CALLBACK(test_tools_cb), st));
+    gtk_box_append(GTK_BOX(st->utils_nxc),
+        chip_button("Test NXT", "qa-green", G_CALLBACK(test_brick_cb), st));
     gtk_box_append(GTK_BOX(utils_content), st->utils_nxc);
 
     /* NQC utilities */
@@ -2851,7 +2924,7 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_widget_add_css_class(tower_lbl, "settings-label");
     st->tower_entry = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(st->tower_entry),
-        "empty = let nqc decide  ·  e.g. usb, /dev/usb/legousbtower0");
+        "empty = let nqc decide  ·  usb for the USB tower, or a serial port");
     gtk_widget_add_css_class(st->tower_entry, "path-field");
     gtk_widget_set_hexpand(st->tower_entry, TRUE);
     GtkWidget *detect = gtk_button_new_with_label("Detect");
@@ -2877,6 +2950,13 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_box_append(GTK_BOX(row4), min_lbl);
     gtk_box_append(GTK_BOX(row4), apply_sleep);
     gtk_box_append(GTK_BOX(st->utils_nqc), row4);
+
+    GtkWidget *row5 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_box_append(GTK_BOX(row5),
+        chip_button("Test tools", "qa-green", G_CALLBACK(test_tools_cb), st));
+    gtk_box_append(GTK_BOX(row5),
+        chip_button("Test brick", "qa-green", G_CALLBACK(test_brick_cb), st));
+    gtk_box_append(GTK_BOX(st->utils_nqc), row5);
     gtk_box_append(GTK_BOX(utils_content), st->utils_nqc);
 
     gtk_expander_set_child(GTK_EXPANDER(st->utils_expander), utils_content);

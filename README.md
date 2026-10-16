@@ -32,7 +32,7 @@ For NQC also install `nqc` (AUR).
 
 ### Linux (Fedora)
 
-Thanks to the Eurobricks user who tested this first. The app itself only needs GTK4 and libusb:
+Tested first by COPERNICON on Eurobricks (see Thanks below). The app itself only needs GTK4 and libusb:
 ```
 sudo dnf install gcc make pkgconf-pkg-config gtk4-devel libusb1-devel
 git clone https://github.com/JimBolanos/brickcode-studio.git
@@ -59,6 +59,25 @@ The RCX needs its firmware once: gear button → Brick utilities → pick
 `~/.local/brickcode/share/firmware/firm0328.lgo` → Send firmware
 (keep the RCX 10-20 cm from the tower, about 3-5 minutes).
 
+## Firmware
+
+The RCX needs a firmware once. The files are in the nqc repository, with a short description of each:
+https://github.com/jverne/nqc/tree/master/firmware
+
+- `firm0328.lgo` is the RCX 2.0 firmware (target **RCX2**, the default). `firm0332.lgo` is the newest LEGO one and also works.
+- `firm0309.lgo` is the original RCX 1.0 firmware (target **RCX**).
+- `fast####.lgo` are Dick Swan's firmwares (target **Swan**). Not every one of them works with nqc.
+
+The target menu in BrickCode Studio shows the matching firmware file next to each name. Scout, CyberMaster and Spybotics do not need one.
+
+## Troubleshooting
+
+Open the Brick utilities in the drawer and use **Test tools** (checks that `nqc` and `nbc` are found) and
+**Test brick** / **Test NXT** (asks the brick for its version or battery, so you know the USB link works).
+
+On Linux the RCX tower port must be `usb` (not `/dev/usb/legousbtower0`); the **Detect** button sets it for you.
+If you get a permission error, add your user to the group that owns the tower (`dialout` or `plugdev`, depending on the distro) and log in again.
+
 ## Examples
 
 See the [`examples`](examples) folder: `forward_and_back.nqc` (RCX / Scout), `forward_and_back.nxc` and `touch_sensor_motor.nxc` (NXT).
@@ -78,6 +97,12 @@ If you find a bug or have an idea, open an issue here or find me at [github.com/
 Hola, soy **Jim Bolaños**. Programo robots de LEGO como pasatiempo (RCX, Scout, NXT y hubs Powered Up) y escribo sobre ellos en mi blog.
 Creé BrickCode Studio para que estos ladrillos clásicos sigan funcionando en computadoras modernas: un solo editor, sin drivers viejos, en Linux y macOS.
 Si encuentras un error o tienes una idea, abre un issue aquí o búscame en [github.com/JimBolanos](https://github.com/JimBolanos). Mis creaciones están en [Rebrickable](https://rebrickable.com/users/jimmy.bolanos/).
+
+## Thanks / Agradecimientos
+
+Thanks to **COPERNICON** from the Eurobricks forum for providing feedback and installing BrickCode Studio on Fedora Linux.
+
+Gracias a **COPERNICON** del foro Eurobricks por dar su opinión e instalar BrickCode Studio en Fedora Linux.
 
 ## Notes
 
