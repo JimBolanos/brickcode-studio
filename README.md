@@ -28,7 +28,25 @@ The interface is available in **English and Spanish** (selector in the top bar).
 cd nbc-git && makepkg -si                 # NXC compiler + udev rules for the NXT
 cd ../brickcode-studio && makepkg -si
 ```
-For NQC also install `nqc` (AUR). Other distros: `cd brickcode-studio && make && sudo make install`.
+For NQC also install `nqc` (AUR).
+
+### Linux (Fedora)
+
+Thanks to the Eurobricks user who tested this first. The app itself only needs GTK4 and libusb:
+```
+sudo dnf install gcc make pkgconf-pkg-config gtk4-devel libusb1-devel
+git clone https://github.com/JimBolanos/brickcode-studio.git
+cd brickcode-studio/brickcode-studio
+make
+sudo make install
+```
+(`make` needs no sudo, only `make install` does.) To compile programs you also need `nqc` (RCX/Scout) and `nbc` (NXT),
+which Fedora does not package. `bash linux/install-fedora.sh` installs all the dependencies, builds nqc, nbc and the app
+into `~/.local/brickcode`, and offers the udev rule so the NXT works without root. Unplug and replug the NXT afterwards.
+
+### Linux (other distros)
+
+Install the GTK4 and libusb-1.0 development packages, then `cd brickcode-studio && make && sudo make install`.
 
 ### macOS (Apple Silicon)
 

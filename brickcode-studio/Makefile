@@ -6,7 +6,7 @@ PKGS     = gtk4 libusb-1.0
 
 brickcode-studio: brickcode-studio.c nqc_tables.inc i18n_es.inc
 	$(CC) $(CFLAGS) $$(pkg-config --cflags $(PKGS)) -o $@ brickcode-studio.c \
-	    $$(pkg-config --libs $(PKGS))
+	    $$(pkg-config --libs $(PKGS)) -lm
 
 install: brickcode-studio
 	install -Dm755 brickcode-studio $(DESTDIR)$(PREFIX)/bin/brickcode-studio
