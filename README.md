@@ -22,35 +22,19 @@ The interface is available in **English and Spanish** (selector in the top bar).
 
 ## Install
 
-### Linux (Arch / Omarchy)
+| System | Status |
+| --- | --- |
+| macOS, Apple Silicon | Confirmed on a Mac mini M4 (RCX and NXT). |
+| Linux Mint | Tested by COPERNICON (Eurobricks) with the RCX and the USB tower. NXT not tested yet. |
+| Fedora | App built and run by COPERNICON. The tower could not be tested there (USB permissions). |
+| Ubuntu / Debian | Should work like Mint (same apt packages). Not tested yet. |
+| Arch / Omarchy | Confirmed with RCX and NXT. |
 
-```
-cd nbc-git && makepkg -si                 # NXC compiler + udev rules for the NXT
-cd ../brickcode-studio && makepkg -si
-```
-For NQC also install `nqc` (AUR).
-
-### Linux (Fedora)
-
-Tested first by COPERNICON on Eurobricks (see Thanks below). The app itself only needs GTK4 and libusb:
-```
-sudo dnf install gcc make pkgconf-pkg-config gtk4-devel libusb1-devel
-git clone https://github.com/JimBolanos/brickcode-studio.git
-cd brickcode-studio/brickcode-studio
-make
-sudo make install
-```
-(`make` needs no sudo, only `make install` does.) To compile programs you also need `nqc` (RCX/Scout) and `nbc` (NXT),
-which Fedora does not package. `bash linux/install-fedora.sh` installs all the dependencies, builds nqc, nbc and the app
-into `~/.local/brickcode`, and offers the udev rule so the NXT works without root. Unplug and replug the NXT afterwards.
-
-### Linux (other distros)
-
-Install the GTK4 and libusb-1.0 development packages, then `cd brickcode-studio && make && sudo make install`.
+The Scout, CyberMaster and Spybotics targets are in the menu but have not been tested on real bricks yet. Feedback is welcome.
 
 ### macOS (Apple Silicon)
 
-Needs Homebrew and the Xcode Command Line Tools.
+Needs Homebrew and the Xcode Command Line Tools. No drivers and no sudo.
 ```
 bash macos/install-mac.sh
 ```
@@ -58,6 +42,60 @@ It builds nqc, nbc and the app into `~/.local/brickcode` and creates `~/Applicat
 The RCX needs its firmware once: gear button → Brick utilities → pick
 `~/.local/brickcode/share/firmware/firm0328.lgo` → Send firmware
 (keep the RCX 10-20 cm from the tower, about 3-5 minutes).
+
+### Linux Mint
+
+Steps by COPERNICON (Eurobricks). First plug in the tower and check that the laptop recognises it:
+```
+sudo dmesg --follow
+```
+Somewhere in the output you should see "registered new interface driver legousbtower". Then:
+```
+sudo apt install nqc                      # RCX / Scout compiler
+sudo apt install libusb-1.0-0-dev         # libusb
+sudo apt install libgtk-4-dev             # GTK4
+git clone https://github.com/JimBolanos/brickcode-studio.git
+cd brickcode-studio/brickcode-studio
+make                                      # no sudo needed
+sudo make install
+```
+In the app, set **Tower port** to `usb` (the **Detect** button does it). A good guide to installing NQC on Linux:
+https://brickbot.github.io/nqc/PLATFORM-Linux.html
+
+`nbc`, the compiler for the NXT, is not in the apt repositories. `bash linux/install-debian.sh` builds nqc, nbc and the app into
+`~/.local/brickcode` (not tested yet). For the NXT you also need the udev rule `nbc-git/70-nxt.rules`.
+
+### Linux Fedora
+
+First confirmed by COPERNICON (Eurobricks). The app only needs GTK4 and libusb:
+```
+sudo dnf install gcc make pkgconf-pkg-config gtk4-devel libusb1-devel
+git clone https://github.com/JimBolanos/brickcode-studio.git
+cd brickcode-studio/brickcode-studio
+make
+sudo make install
+```
+`make` needs no sudo, only `make install` does. To compile programs you also need `nqc` (RCX/Scout) and `nbc` (NXT), which Fedora
+does not package. `bash linux/install-fedora.sh` installs all the dependencies, builds nqc, nbc and the app into `~/.local/brickcode`,
+and offers the udev rule so the NXT works without root. Unplug and replug the NXT afterwards.
+
+For the RCX tower your user needs access to the device (group `dialout` or `plugdev`, depending on the distro); log out and in after adding it.
+
+### Linux Ubuntu / Debian
+
+Same steps as Linux Mint (Mint is based on Ubuntu). Not tested yet; please report what you find.
+
+### Linux Arch / Omarchy
+
+```
+cd nbc-git && makepkg -si                 # NXC compiler + udev rules for the NXT
+cd ../brickcode-studio && makepkg -si
+```
+For NQC also install `nqc` (AUR).
+
+### Linux, other distros
+
+Install the GTK4 and libusb-1.0 development packages, then `cd brickcode-studio && make && sudo make install`.
 
 ## Firmware
 
