@@ -19,6 +19,7 @@ The interface is available in **English and Spanish** (selector in the top bar).
 - Device chip: shows whether an NXT or an RCX tower is connected
 - RCX tools: tower port detection, firmware, datalog, IR range, auto-shutoff
 - NXT Explorer: files, battery and firmware over USB
+- Remote (RCX): the buttons of the LEGO IR remote (messages, motors A/B/C, programs P1-P5, stop, sound), sent with `nqc -remote`. Not tested on a real RCX yet.
 
 ## Install
 
@@ -104,9 +105,8 @@ https://github.com/jverne/nqc/tree/master/firmware
 
 - `firm0328.lgo` is the RCX 2.0 firmware (target **RCX2**, the default). `firm0332.lgo` is the newest LEGO one and also works.
 - `firm0309.lgo` is the original RCX 1.0 firmware (target **RCX**).
-- `fast####.lgo` are Dick Swan's firmwares (target **Swan**). Not every one of them works with nqc.
 
-The target menu in BrickCode Studio shows the matching firmware file next to each name. Scout, CyberMaster and Spybotics do not need one.
+The target menu in BrickCode Studio shows the matching firmware file next to each name.
 
 ## Troubleshooting
 

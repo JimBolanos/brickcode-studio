@@ -39,7 +39,7 @@
 #include <stdlib.h>
 
 #define APP_NAME     "BrickCode Studio"
-#define APP_VERSION  "2.0.2"
+#define APP_VERSION  "2.0.3"
 
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
@@ -211,7 +211,6 @@ static const struct { const char *name; const char *label; const char *desc; } N
     { "CM",    "CM",                  "CyberMaster" },
     { "Scout", "Scout",               "Scout" },
     { "Spy",   "Spy",                 "Spybotics" },
-    { "Swan",  "Swan (fast####.lgo)", "Swan — Dick Swan's fast firmware (not every fast firmware works with nqc)" },
 };
 
 /* Where the RCX tower shows up on Linux. */
@@ -524,7 +523,7 @@ static void apply_mode(AppState *st, Mode new_mode) {
 
     gtk_entry_set_placeholder_text(GTK_ENTRY(st->cmd_entry),
         new_mode == MODE_NQC
-          ? "any nqc arguments, e.g. -firmware fast.lgo  ·  -sleep 5  ·  ↑↓ for history"
+          ? "any nqc arguments, e.g. -firmware firm0328.lgo  ·  -sleep 5  ·  ↑↓ for history"
           : "any nbc arguments, e.g. -firmfast firm0332.lgo  ·  -pgm 3 -run  ·  ↑↓ for history");
 
     /* If the buffer still holds the other language's starter program,
@@ -2330,7 +2329,7 @@ static void about_cb(GtkButton *btn, gpointer user_data) {
 
     const char *rows[][2] = {
         {"Compilers",    "nqc (RCX / Scout)  ·  nbc (NXT)"},
-        {"NQC targets",  "RCX2 · RCX · CM · Scout · Spy · Swan"},
+        {"NQC targets",  "RCX2 · RCX · CM · Scout · Spy"},
         {"NQC link",     "IR tower (USB / serial)"},
         {"NXC link",     "USB (libusb) · Bluetooth on Linux"},
         {"Highlighting", "Custom (GRegex)"},
@@ -2564,6 +2563,99 @@ static GtkWidget *nqc_flag_button(AppState *st, const char *label,
     GtkWidget *b = chip_button(label, css_class, G_CALLBACK(nqc_util_cb), st);
     g_object_set_data(G_OBJECT(b), "nqc-flag", (gpointer)flag);
     return b;
+}
+
+/* ---------------------------------------------------------------------
+ * Remote: the buttons of the LEGO IR remote, sent with  nqc -remote
+ * Each button is one 16-bit mask (the same values BricxCC uses).
+ * --------------------------------------------------------------------- */
+
+static void remote_btn_cb(GtkButton *btn, gpointer user_data) {
+    AppState *st = user_data;
+    char hex[8];
+    snprintf(hex, sizeof(hex), "%04X",
+             GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(btn), "mask")));
+    GPtrArray *args = g_ptr_array_new();
+    g_ptr_array_add(args, "-remote");
+    g_ptr_array_add(args, hex);
+    g_ptr_array_add(args, "3");
+    run_nqc(st, args, TIMEOUT_DEFAULT, "Remote command sent.", "Sending remote command…");
+    g_ptr_array_free(args, TRUE);
+}
+
+static GtkWidget *remote_button(AppState *st, const char *label, const char *css,
+                                 guint mask) {
+    GtkWidget *b = chip_button(label, css, G_CALLBACK(remote_btn_cb), st);
+    g_object_set_data(G_OBJECT(b), "mask", GUINT_TO_POINTER(mask));
+    return b;
+}
+
+static void open_remote_cb(GtkButton *btn, gpointer user_data) {
+    AppState *st = user_data;
+    GtkWidget *win = gtk_window_new();
+    gtk_window_set_title(GTK_WINDOW(win), T("Remote"));
+    gtk_window_set_transient_for(GTK_WINDOW(win), GTK_WINDOW(st->window));
+    gtk_window_set_resizable(GTK_WINDOW(win), FALSE);
+
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_widget_add_css_class(box, "drawer");
+    gtk_widget_set_margin_start(box, 14);
+    gtk_widget_set_margin_end(box, 14);
+    gtk_widget_set_margin_top(box, 12);
+    gtk_widget_set_margin_bottom(box, 12);
+    gtk_window_set_child(GTK_WINDOW(win), box);
+
+    GtkWidget *logo = make_icon_widget(64);
+    gtk_widget_set_halign(logo, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(box), logo);
+
+    /* Messages 1-3 */
+    GtkWidget *l1 = gtk_label_new("Message");
+    gtk_widget_add_css_class(l1, "settings-label");
+    gtk_box_append(GTK_BOX(box), l1);
+    GtkWidget *msgs = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_set_halign(msgs, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(msgs), remote_button(st, "1", "qa-blue", 0x0100));
+    gtk_box_append(GTK_BOX(msgs), remote_button(st, "2", "qa-blue", 0x0200));
+    gtk_box_append(GTK_BOX(msgs), remote_button(st, "3", "qa-blue", 0x0400));
+    gtk_box_append(GTK_BOX(box), msgs);
+
+    /* Motors A, B, C: forward on top, backward below */
+    const char *names[3] = { "A", "B", "C" };
+    const guint fwd[3] = { 0x0800, 0x1000, 0x2000 };
+    const guint rev[3] = { 0x4000, 0x8000, 0x0001 };
+    GtkWidget *motors = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 14);
+    gtk_widget_set_halign(motors, GTK_ALIGN_CENTER);
+    for (int i = 0; i < 3; i++) {
+        GtkWidget *col = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+        gtk_box_append(GTK_BOX(col), remote_button(st, "▲", "qa-green", fwd[i]));
+        GtkWidget *n = gtk_label_new(names[i]);
+        gtk_widget_add_css_class(n, "console-label");
+        gtk_box_append(GTK_BOX(col), n);
+        gtk_box_append(GTK_BOX(col), remote_button(st, "▼", "qa-green", rev[i]));
+        gtk_box_append(GTK_BOX(motors), col);
+    }
+    gtk_box_append(GTK_BOX(box), motors);
+
+    /* Programs 1-5 */
+    GtkWidget *l2 = gtk_label_new("Program");
+    gtk_widget_add_css_class(l2, "settings-label");
+    gtk_box_append(GTK_BOX(box), l2);
+    GtkWidget *progs = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_widget_set_halign(progs, GTK_ALIGN_CENTER);
+    const char *pn[5] = { "P1", "P2", "P3", "P4", "P5" };
+    for (int i = 0; i < 5; i++)
+        gtk_box_append(GTK_BOX(progs), remote_button(st, pn[i], "qa-purple", 0x0002u << i));
+    gtk_box_append(GTK_BOX(box), progs);
+
+    /* Stop outputs and sound */
+    GtkWidget *last = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_set_halign(last, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(last), remote_button(st, "Stop", "qa-pink", 0x0040));
+    gtk_box_append(GTK_BOX(last), remote_button(st, "Sound", "qa-orange", 0x0080));
+    gtk_box_append(GTK_BOX(box), last);
+
+    gtk_window_present(GTK_WINDOW(win));
 }
 
 /* ---------------------------------------------------------------------
@@ -2956,6 +3048,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
         chip_button("Test tools", "qa-green", G_CALLBACK(test_tools_cb), st));
     gtk_box_append(GTK_BOX(row5),
         chip_button("Test brick", "qa-green", G_CALLBACK(test_brick_cb), st));
+    gtk_box_append(GTK_BOX(row5),
+        chip_button("Remote", "qa-blue", G_CALLBACK(open_remote_cb), st));
     gtk_box_append(GTK_BOX(st->utils_nqc), row5);
     gtk_box_append(GTK_BOX(utils_content), st->utils_nqc);
 
