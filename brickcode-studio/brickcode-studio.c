@@ -39,7 +39,7 @@
 #include <stdlib.h>
 
 #define APP_NAME     "BrickCode Studio"
-#define APP_VERSION  "2.0.5"
+#define APP_VERSION  "2.0.6"
 
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
@@ -2570,17 +2570,65 @@ static GtkWidget *nqc_flag_button(AppState *st, const char *label,
  * Each button is one 16-bit mask (the same values BricxCC uses).
  * --------------------------------------------------------------------- */
 
+/* The RCX ignores a message whose opcode equals the previous one (it takes it
+ * for a retransmission). "nqc -remote HEX N" always sends 0xD2, so only the first
+ * message counts and the others time out. We send one message per nqc run with
+ * "-raw1" and alternate the opcode between 0xD2 and 0xDA (the RCX toggle bit). */
+static gboolean remote_toggle = FALSE;
+static gboolean remote_active = FALSE;   /* a button is being held */
+static gboolean remote_busy = FALSE;     /* an nqc run is in flight */
+static char remote_hex[8] = "0000";
+static AppState *remote_st = NULL;
+
+static void remote_next(void);
+
+static void remote_done(GObject *src, GAsyncResult *res, gpointer data) {
+    g_subprocess_wait_finish(G_SUBPROCESS(src), res, NULL);
+    remote_busy = FALSE;
+    remote_next();
+}
+
+/* Send one message (opcode toggles every time). */
+static void remote_send(const char *hex) {
+    AppState *st = remote_st;
+    guint t = gtk_drop_down_get_selected(GTK_DROP_DOWN(st->target_dropdown));
+    char *target = g_strdup_printf("-T%s", NQC_TARGETS[t].name);
+    char msg[16];
+    /* bytes: opcode, low byte, high byte of the 16-bit mask */
+    snprintf(msg, sizeof(msg), "%s%.2s%.2s", remote_toggle ? "DA" : "D2", hex + 2, hex);
+    remote_toggle = !remote_toggle;
+    const char *argv[] = { NQC_CMD, target, "-raw1", msg, NULL };
+    GSubprocessLauncher *l = g_subprocess_launcher_new(
+        G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE);
+    const char *port = gtk_editable_get_text(GTK_EDITABLE(st->tower_entry));
+    if (port && *port) g_subprocess_launcher_setenv(l, "RCX_PORT", port, TRUE);
+    GSubprocess *p = g_subprocess_launcher_spawnv(l, argv, NULL);
+    g_object_unref(l);
+    g_free(target);
+    if (!p) return;
+    remote_busy = TRUE;
+    g_subprocess_wait_async(p, NULL, remote_done, NULL);
+    g_object_unref(p);
+}
+
+/* Called when a run ends: keep sending while the button is held, then send 0000. */
+static gboolean remote_stop_pending = FALSE;
+static void remote_next(void) {
+    if (remote_active) { remote_send(remote_hex); return; }
+    if (remote_stop_pending) { remote_stop_pending = FALSE; remote_send("0000"); }
+}
+
 static void remote_btn_cb(GtkButton *btn, gpointer user_data) {
     AppState *st = user_data;
     char hex[8];
+    remote_st = st;
+    if (remote_busy) return;
     snprintf(hex, sizeof(hex), "%04X",
              GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(btn), "mask")));
-    GPtrArray *args = g_ptr_array_new();
-    g_ptr_array_add(args, "-remote");
-    g_ptr_array_add(args, hex);
-    g_ptr_array_add(args, "3");
-    run_nqc(st, args, TIMEOUT_DEFAULT, "Remote command sent.", "Sending remote command…");
-    g_ptr_array_free(args, TRUE);
+    remote_send(hex);
+    char *line = g_strdup_printf("$ nqc -raw1 (remote %s)", hex);
+    log_output(st, line, "cmd");
+    g_free(line);
 }
 
 static GtkWidget *remote_button(AppState *st, const char *label, const char *css,
@@ -2591,49 +2639,29 @@ static GtkWidget *remote_button(AppState *st, const char *label, const char *css
 }
 
 /* Motor buttons work like the real remote: the motor runs while the button is
- * held. nqc keeps sending the command; releasing kills it and sends "keys
- * released" (0000). */
-static GSubprocess *remote_proc = NULL;
-
-static void remote_spawn(AppState *st, const char *hex, const char *repeat) {
-    guint t = gtk_drop_down_get_selected(GTK_DROP_DOWN(st->target_dropdown));
-    char *target = g_strdup_printf("-T%s", NQC_TARGETS[t].name);
-    const char *argv[] = { NQC_CMD, target, "-remote", hex, repeat, NULL };
-    GSubprocessLauncher *l = g_subprocess_launcher_new(
-        G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE);
-    const char *port = gtk_editable_get_text(GTK_EDITABLE(st->tower_entry));
-    if (port && *port) g_subprocess_launcher_setenv(l, "RCX_PORT", port, TRUE);
-    GSubprocess *p = g_subprocess_launcher_spawnv(l, argv, NULL);
-    g_object_unref(l);
-    g_free(target);
-    if (g_strcmp0(repeat, "3") == 0) { if (p) g_object_unref(p); return; }
-    remote_proc = p;
-}
-
-static void remote_stop(AppState *st) {
-    if (!remote_proc) return;
-    g_subprocess_force_exit(remote_proc);
-    g_clear_object(&remote_proc);
-    remote_spawn(st, "0000", "3");
-}
-
+ * held (messages keep being sent); releasing sends "keys released" (0000). */
 static void remote_press_cb(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {
     AppState *st = data;
     char hex[8];
-    /* The button has its own click gesture that would cancel ours (and stop the
-     * motor at once): claim the press for ourselves. */
+    /* The button has its own click gesture that would cancel ours: claim the press. */
     gtk_gesture_set_state(GTK_GESTURE(g), GTK_EVENT_SEQUENCE_CLAIMED);
     GtkWidget *w = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(g));
     snprintf(hex, sizeof(hex), "%04X", GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(w), "mask")));
-    remote_stop(st);
-    remote_spawn(st, hex, "600");
-    char *line = g_strdup_printf("$ nqc -remote %s 600  (hold)", hex);
+    remote_st = st;
+    g_strlcpy(remote_hex, hex, sizeof(remote_hex));
+    remote_active = TRUE;
+    remote_stop_pending = FALSE;
+    if (!remote_busy) remote_send(remote_hex);
+    char *line = g_strdup_printf("$ nqc -raw1 (remote %s, hold)", hex);
     log_output(st, line, "cmd");
     g_free(line);
 }
 
 static void remote_release_cb(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {
-    remote_stop(data);
+    if (!remote_active) return;
+    remote_active = FALSE;
+    remote_stop_pending = TRUE;
+    if (!remote_busy) remote_next();
 }
 
 static void noop_cb(GtkButton *btn, gpointer data) { }

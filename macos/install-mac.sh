@@ -70,7 +70,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>BrickCodeStudio</string>
   <key>CFBundleIdentifier</key><string>org.brickcode.Studio</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleVersion</key><string>2.0.5</string>
+  <key>CFBundleVersion</key><string>2.0.6</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
