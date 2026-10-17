@@ -19,7 +19,7 @@ The interface is available in **English and Spanish** (selector in the top bar).
 - Device chip: shows whether an NXT or an RCX tower is connected
 - RCX tools: tower port detection, firmware, datalog, IR range, auto-shutoff
 - NXT Explorer: files, battery and firmware over USB
-- Remote (RCX): the buttons of the LEGO IR remote (messages, motors A/B/C, programs P1-P5, stop, sound), sent with `nqc -remote`. Not tested on a real RCX yet.
+- Remote (RCX): the buttons of the LEGO IR remote (messages, motors A/B/C, programs P1-P5, stop, sound), sent with `nqc -remote`. The motor buttons run the motor while held, like the real remote.
 
 ## Install
 

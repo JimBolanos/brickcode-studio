@@ -39,7 +39,7 @@
 #include <stdlib.h>
 
 #define APP_NAME     "BrickCode Studio"
-#define APP_VERSION  "2.0.3"
+#define APP_VERSION  "2.0.4"
 
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
@@ -2590,6 +2590,61 @@ static GtkWidget *remote_button(AppState *st, const char *label, const char *css
     return b;
 }
 
+/* Motor buttons work like the real remote: the motor runs while the button is
+ * held. nqc keeps sending the command; releasing kills it and sends "keys
+ * released" (0000). */
+static GSubprocess *remote_proc = NULL;
+
+static void remote_spawn(AppState *st, const char *hex, const char *repeat) {
+    guint t = gtk_drop_down_get_selected(GTK_DROP_DOWN(st->target_dropdown));
+    char *target = g_strdup_printf("-T%s", NQC_TARGETS[t].name);
+    const char *argv[] = { NQC_CMD, target, "-remote", hex, repeat, NULL };
+    GSubprocessLauncher *l = g_subprocess_launcher_new(
+        G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE);
+    const char *port = gtk_editable_get_text(GTK_EDITABLE(st->tower_entry));
+    if (port && *port) g_subprocess_launcher_setenv(l, "RCX_PORT", port, TRUE);
+    GSubprocess *p = g_subprocess_launcher_spawnv(l, argv, NULL);
+    g_object_unref(l);
+    g_free(target);
+    if (g_strcmp0(repeat, "3") == 0) { if (p) g_object_unref(p); return; }
+    remote_proc = p;
+}
+
+static void remote_stop(AppState *st) {
+    if (!remote_proc) return;
+    g_subprocess_force_exit(remote_proc);
+    g_clear_object(&remote_proc);
+    remote_spawn(st, "0000", "3");
+}
+
+static void remote_press_cb(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {
+    AppState *st = data;
+    char hex[8];
+    GtkWidget *w = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(g));
+    snprintf(hex, sizeof(hex), "%04X", GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(w), "mask")));
+    remote_stop(st);
+    remote_spawn(st, hex, "600");
+}
+
+static void remote_release_cb(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {
+    remote_stop(data);
+}
+
+static void noop_cb(GtkButton *btn, gpointer data) { }
+
+static GtkWidget *remote_hold_button(AppState *st, const char *label, const char *css,
+                                      guint mask) {
+    GtkWidget *b = chip_button(label, css, G_CALLBACK(noop_cb), st);
+    g_object_set_data(G_OBJECT(b), "mask", GUINT_TO_POINTER(mask));
+    GtkGesture *g = gtk_gesture_click_new();
+    gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(g), GTK_PHASE_CAPTURE);
+    g_signal_connect(g, "pressed", G_CALLBACK(remote_press_cb), st);
+    g_signal_connect(g, "released", G_CALLBACK(remote_release_cb), st);
+    g_signal_connect(g, "cancel", G_CALLBACK(remote_release_cb), st);
+    gtk_widget_add_controller(b, GTK_EVENT_CONTROLLER(g));
+    return b;
+}
+
 static void open_remote_cb(GtkButton *btn, gpointer user_data) {
     AppState *st = user_data;
     GtkWidget *win = gtk_window_new();
@@ -2628,11 +2683,11 @@ static void open_remote_cb(GtkButton *btn, gpointer user_data) {
     gtk_widget_set_halign(motors, GTK_ALIGN_CENTER);
     for (int i = 0; i < 3; i++) {
         GtkWidget *col = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-        gtk_box_append(GTK_BOX(col), remote_button(st, "▲", "qa-green", fwd[i]));
+        gtk_box_append(GTK_BOX(col), remote_hold_button(st, "▲", "qa-green", fwd[i]));
         GtkWidget *n = gtk_label_new(names[i]);
         gtk_widget_add_css_class(n, "console-label");
         gtk_box_append(GTK_BOX(col), n);
-        gtk_box_append(GTK_BOX(col), remote_button(st, "▼", "qa-green", rev[i]));
+        gtk_box_append(GTK_BOX(col), remote_hold_button(st, "▼", "qa-green", rev[i]));
         gtk_box_append(GTK_BOX(motors), col);
     }
     gtk_box_append(GTK_BOX(box), motors);
