@@ -41,7 +41,7 @@ bash macos/install-mac.sh
 ```
 It builds nqc, nbc and the app into `~/.local/brickcode` and creates `~/Applications/BrickCode Studio.app`.
 The RCX needs its firmware once: gear button → Brick utilities → pick
-`~/.local/brickcode/share/firmware/firm0328.lgo` → Send firmware
+`~/.local/brickcode/share/firmware/firm0328.lgo` (the installer copies it there) → Send firmware
 (keep the RCX 10-20 cm from the tower, about 3-5 minutes).
 
 ### Linux Mint
@@ -100,7 +100,7 @@ Install the GTK4 and libusb-1.0 development packages, then `cd brickcode-studio 
 
 ## Firmware
 
-The RCX needs a firmware once. The files are in the nqc repository, with a short description of each:
+The RCX needs a firmware once. `firm0328.lgo` and `firm0309.lgo` are included in the `firmware/` folder of this repo, and the installers copy them to `~/.local/brickcode/share/firmware/`. Descriptions of all firmware files are in the nqc repository:
 https://github.com/jverne/nqc/tree/master/firmware
 
 - `firm0328.lgo` is the RCX 2.0 firmware (target **RCX2**, the default). `firm0332.lgo` is the newest LEGO one and also works.

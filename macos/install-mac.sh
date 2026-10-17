@@ -6,6 +6,7 @@ set -e
 
 PREFIX="$HOME/.local/brickcode"
 SRC="$(cd "$(dirname "$0")/.." && pwd)/brickcode-studio"
+FW="$(cd "$(dirname "$0")/.." && pwd)/firmware"
 WORK="$HOME/.cache/brickcode-build"
 mkdir -p "$PREFIX/bin" "$PREFIX/share/brickcode/nbc" "$PREFIX/share/firmware" "$WORK"
 
@@ -30,6 +31,7 @@ echo "==> 2/4 nqc (RCX / Scout)"
   make -j"$(sysctl -n hw.ncpu)"
   cp bin/nqc "$PREFIX/bin/nqc"
   cp firmware/*.lgo "$PREFIX/share/firmware/" )
+cp "$FW"/*.lgo "$PREFIX/share/firmware/"      # bundled copies (offline)
 
 echo "==> 3/4 nbc (NXT compiler, compile-only: the app uploads over USB itself)"
 [ -d "$WORK/nbc-compiler" ] || git clone --depth 1 https://github.com/pierre-24/nbc-compiler.git "$WORK/nbc-compiler"
@@ -68,7 +70,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>BrickCodeStudio</string>
   <key>CFBundleIdentifier</key><string>org.brickcode.Studio</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleVersion</key><string>2.0.4</string>
+  <key>CFBundleVersion</key><string>2.0.5</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST

@@ -39,7 +39,7 @@
 #include <stdlib.h>
 
 #define APP_NAME     "BrickCode Studio"
-#define APP_VERSION  "2.0.4"
+#define APP_VERSION  "2.0.5"
 
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
@@ -2620,10 +2620,16 @@ static void remote_stop(AppState *st) {
 static void remote_press_cb(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {
     AppState *st = data;
     char hex[8];
+    /* The button has its own click gesture that would cancel ours (and stop the
+     * motor at once): claim the press for ourselves. */
+    gtk_gesture_set_state(GTK_GESTURE(g), GTK_EVENT_SEQUENCE_CLAIMED);
     GtkWidget *w = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(g));
     snprintf(hex, sizeof(hex), "%04X", GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(w), "mask")));
     remote_stop(st);
     remote_spawn(st, hex, "600");
+    char *line = g_strdup_printf("$ nqc -remote %s 600  (hold)", hex);
+    log_output(st, line, "cmd");
+    g_free(line);
 }
 
 static void remote_release_cb(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {

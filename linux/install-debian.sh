@@ -6,6 +6,7 @@ set -e
 
 PREFIX="$HOME/.local/brickcode"
 SRC="$(cd "$(dirname "$0")/.." && pwd)/brickcode-studio"
+FW="$(cd "$(dirname "$0")/.." && pwd)/firmware"
 WORK="$HOME/.cache/brickcode-build"
 mkdir -p "$PREFIX/bin" "$PREFIX/share/brickcode/nbc" "$PREFIX/share/firmware" "$WORK"
 [ -f "$SRC/brickcode-studio.c" ] || { echo "Cannot find $SRC/brickcode-studio.c"; exit 1; }
@@ -23,6 +24,7 @@ echo "==> 2/5 nqc (RCX / Scout)"
   make -j"$(nproc)"
   cp bin/nqc "$PREFIX/bin/nqc"
   cp firmware/*.lgo "$PREFIX/share/firmware/" )
+cp "$FW"/*.lgo "$PREFIX/share/firmware/"      # bundled copies (offline)
 
 echo "==> 3/5 nbc (NXT compiler, compile-only: the app uploads over USB itself)"
 [ -d "$WORK/nbc-compiler" ] || git clone --depth 1 https://github.com/pierre-24/nbc-compiler.git "$WORK/nbc-compiler"
