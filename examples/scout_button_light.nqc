@@ -1,0 +1,14 @@
+// Scout example (by Copernicon): a pushbutton on sensor port 1
+// turns the built-in light on while it is pressed.
+
+task main()
+{
+  CalibrateSensor();
+  while (true) {
+    if (SENSOR_1 == 1) {
+      SetLight(LIGHT_ON);
+    } else {
+      SetLight(LIGHT_OFF);
+    }
+  }
+}

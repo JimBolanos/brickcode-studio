@@ -1,0 +1,21 @@
+// RCX example (by Copernicon): each press of a touch sensor on port 1
+// adds 1 to the number shown on the display.
+
+int counter = 0;
+int previousState = 0;
+
+task main()
+{
+  SetSensor(SENSOR_1, SENSOR_TOUCH);
+  while (true) {
+    if ((SENSOR_1 == 1) && (previousState == 0)) {
+      counter++;
+      previousState = 1;
+    }
+    if ((SENSOR_1 == 0) && (previousState == 1)) {
+      previousState = 0;
+    }
+    SetUserDisplay(counter, 0);
+    Wait(1);
+  }
+}

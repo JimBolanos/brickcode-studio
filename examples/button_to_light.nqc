@@ -1,0 +1,15 @@
+// RCX example (by Copernicon): a touch sensor on port 1
+// turns on a light on output A while it is pressed.
+
+task main()
+{
+  SetSensor(SENSOR_1, SENSOR_TOUCH);
+
+  while (true)
+  {
+    if (SENSOR_1 == 1)
+      On(OUT_A);
+    else
+      Off(OUT_A);
+  }
+}

@@ -123,7 +123,7 @@ If you get a permission error, add your user to the group that owns the tower (`
 
 ## Examples
 
-See the [`examples`](examples) folder: `forward_and_back.nqc` (RCX / Scout), `forward_and_back.nxc` and `touch_sensor_motor.nxc` (NXT).
+See the [`examples`](examples) folder: `forward_and_back.nqc`, `counter_to_display.nqc`, `button_to_light.nqc` (RCX) and `scout_button_light.nqc` (Scout); `forward_and_back.nxc` and `touch_sensor_motor.nxc` (NXT). Thanks to Copernicon for the touch-sensor and Scout examples.
 
 ## Español
 
