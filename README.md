@@ -9,15 +9,24 @@ Write a program, press **F5**, and it compiles, downloads and runs on the brick.
 Works on **Linux** (Omarchy theme followed live) and **macOS on Apple Silicon**, with no vendor driver.
 The interface is available in **English and Spanish** (selector in the top bar).
 
-![NQC mode](docs/screenshot-nqc-en.png)
+![NQC mode, light](docs/screenshot-nqc-en.png)
+![NQC mode, dark, Spanish](docs/screenshot-nqc-dark-es.png)
 ![NXC mode, Spanish](docs/screenshot-nxc-es.png)
+
+<p>
+<img src="docs/screenshot-firmware-en.png" width="48%" alt="Firmware sheet">
+<img src="docs/screenshot-remote-en.png" width="20%" alt="Remote">
+</p>
+
+Full guide: [English](docs/USER_GUIDE.en.md) · [Español](docs/USER_GUIDE.es.md)
 
 ## Features
 
+- macOS-style interface: sidebar with Bricks and Tools, light and dark look, one program at a time
 - Syntax highlighting, error line highlighted in the editor
 - Compile / Run / Download from the top bar, console below
 - Device chip: shows whether an NXT or an RCX tower is connected
-- RCX tools: tower port detection, firmware, datalog, IR range, auto-shutoff
+- RCX tools: tower port detection, firmware sheet with a real progress bar, datalog, IR range, auto-shutoff
 - NXT Explorer: files, battery and firmware over USB
 - Remote (RCX): the buttons of the LEGO IR remote (messages, motors A/B/C, programs P1-P5, stop, sound), sent with `nqc`. The motor buttons run the motor while held, like the real remote. The installers patch nqc at build time so it does not wait for a reply the RCX never sends to remote commands (needed for the motor to keep running). Tested on a Mac mini M4 with an RCX 2.0.
 
