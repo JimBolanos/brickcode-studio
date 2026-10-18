@@ -1,6 +1,6 @@
 # Maintainer: Jim Bolaños
 pkgname=brickcode-studio
-pkgver=2.0.6
+pkgver=2.0.7
 pkgrel=1
 pkgdesc="Native GTK4 editor for NQC (RCX/Scout) and NXC (NXT) programming"
 arch=('x86_64')

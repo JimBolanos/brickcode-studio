@@ -18,6 +18,9 @@ sudo dnf install -y gcc gcc-c++ make git pkgconf-pkg-config gtk4-devel libusb1-d
 echo "==> 2/5 nqc (RCX / Scout)"
 [ -d "$WORK/nqc" ] || git clone --depth 1 https://github.com/jverne/nqc.git "$WORK/nqc"
 ( cd "$WORK/nqc"
+  # nqc waits ~0.5 s for a reply the RCX never sends to remote/message commands.
+  # Re-enable the "no reply expected" case (commented out upstream) so the Remote is fast.
+  perl -0pi -e 's|/\*\n(\s*case kRCX_Message:)|$1|; s|(return 0;\s*// unconfirmed\n)\*/\n|$1|' rcxlib/RCX_Link.cpp
   make clean >/dev/null 2>&1 || true
   make bin; make bin/mkdata; make nqh; make nub        # generate files in order
   make compiler/parse.cpp; make compiler/lexer.cpp

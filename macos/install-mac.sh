@@ -25,6 +25,9 @@ export PATH="$WORK/shims:$(brew --prefix flex)/bin:$(brew --prefix bison)/bin:$P
 echo "==> 2/4 nqc (RCX / Scout)"
 [ -d "$WORK/nqc" ] || git clone --depth 1 https://github.com/jverne/nqc.git "$WORK/nqc"
 ( cd "$WORK/nqc"
+  # nqc waits ~0.5 s for a reply the RCX never sends to remote/message commands.
+  # Re-enable the "no reply expected" case (commented out upstream) so the Remote is fast.
+  perl -0pi -e 's|/\*\n(\s*case kRCX_Message:)|$1|; s|(return 0;\s*// unconfirmed\n)\*/\n|$1|' rcxlib/RCX_Link.cpp
   make clean >/dev/null 2>&1 || true
   make bin; make bin/mkdata; make nqh; make nub        # generate files in order
   make compiler/parse.cpp; make compiler/lexer.cpp
@@ -70,7 +73,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>BrickCodeStudio</string>
   <key>CFBundleIdentifier</key><string>org.brickcode.Studio</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleVersion</key><string>2.0.6</string>
+  <key>CFBundleVersion</key><string>2.0.7</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
