@@ -13,6 +13,7 @@ install: brickcode-studio
 	for s in 48 64 128 256 512; do install -Dm644 icon-$$s.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/$${s}x$${s}/apps/brickcode-studio.png; done
 	install -Dm644 brickcode-studio.desktop $(DESTDIR)$(PREFIX)/share/applications/brickcode-studio.desktop
 	install -Dm644 brickcode-studio.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/brickcode-studio.svg
+	for f in ../firmware/*.lgo; do install -Dm644 $$f $(DESTDIR)$(PREFIX)/share/brickcode-studio/firmware/$$(basename $$f); done
 
 clean:
 	rm -f brickcode-studio

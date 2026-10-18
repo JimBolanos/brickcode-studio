@@ -39,7 +39,7 @@
 #include <stdlib.h>
 
 #define APP_NAME     "BrickCode Studio"
-#define APP_VERSION  "2.0.7"
+#define APP_VERSION  "2.1.0"
 
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
@@ -310,6 +310,20 @@ typedef struct {
     GtkTextTag *tag_string;
     GtkTextTag *tag_comment;
     GtkTextTag *tag_errline;
+
+    /* Output taps: the firmware sheet reads nqc's output byte by byte */
+    void (*on_chars)(const char *data, gsize n, gpointer user);
+    void (*on_done)(int code, gpointer user);
+    gpointer tap_data;
+
+    /* Sidebar and header */
+    GtkWidget *side_nqc_tools, *side_nxc_tools;
+    GtkWidget *side_rcx_dot, *side_nxt_dot;
+    GtkWidget *seg_btn[2];
+
+    /* Unsaved changes */
+    gboolean dirty;
+    gboolean close_after_save;
 } AppState;
 
 static const char *mode_template(Mode m) {
@@ -401,10 +415,16 @@ static void update_line_numbers(AppState *st) {
     g_string_free(s, TRUE);
 }
 
+static void update_title(AppState *st);
+
 static void on_buffer_changed(GtkTextBuffer *buffer, gpointer user_data) {
     AppState *st = user_data;
     highlight_buffer(st);
     update_line_numbers(st);
+    if (!st->dirty) {
+        st->dirty = TRUE;
+        update_title(st);
+    }
 }
 
 /* ---------------------------------------------------------------------
@@ -442,13 +462,12 @@ static void update_title(AppState *st) {
     snprintf(title, sizeof(title), APP_NAME " — %s",
               st->current_file ? st->current_file : T("untitled"));
     gtk_window_set_title(GTK_WINDOW(st->window), title);
-    if (st->current_file) {
-        char *base = g_path_get_basename(st->current_file);
-        gtk_label_set_text(GTK_LABEL(st->filename_label), base);
-        g_free(base);
-    } else {
-        gtk_label_set_text(GTK_LABEL(st->filename_label), "untitled");
-    }
+    char *base = st->current_file ? g_path_get_basename(st->current_file)
+                                  : g_strdup("untitled");
+    char *shown = g_strdup_printf("%s%s", base, st->dirty ? " •" : "");
+    gtk_label_set_text(GTK_LABEL(st->filename_label), shown);
+    g_free(shown);
+    g_free(base);
 }
 
 /* ---------------------------------------------------------------------
@@ -520,6 +539,8 @@ static void apply_mode(AppState *st, Mode new_mode) {
     gtk_widget_set_visible(st->nxc_settings, new_mode == MODE_NXC);
     gtk_widget_set_visible(st->utils_nqc, new_mode == MODE_NQC);
     gtk_widget_set_visible(st->utils_nxc, new_mode == MODE_NXC);
+    if (st->side_nqc_tools) gtk_widget_set_visible(st->side_nqc_tools, new_mode == MODE_NQC);
+    if (st->side_nxc_tools) gtk_widget_set_visible(st->side_nxc_tools, new_mode == MODE_NXC);
 
     gtk_entry_set_placeholder_text(GTK_ENTRY(st->cmd_entry),
         new_mode == MODE_NQC
@@ -531,8 +552,10 @@ static void apply_mode(AppState *st, Mode new_mode) {
     GtkTextIter s, e;
     gtk_text_buffer_get_bounds(st->buffer, &s, &e);
     char *text = gtk_text_buffer_get_text(st->buffer, &s, &e, FALSE);
-    if (old != new_mode && (g_strcmp0(text, mode_template(old)) == 0 || !*text))
+    if (old != new_mode && (g_strcmp0(text, mode_template(old)) == 0 || !*text)) {
         gtk_text_buffer_set_text(st->buffer, mode_template(new_mode), -1);
+        st->dirty = FALSE;
+    }
     g_free(text);
 
     highlight_buffer(st);
@@ -557,6 +580,8 @@ static void mode_changed_cb(GObject *dropdown, GParamSpec *pspec,
     AppState *st = user_data;
     guint sel = gtk_drop_down_get_selected(GTK_DROP_DOWN(dropdown));
     if (sel < G_N_ELEMENTS(MODES)) apply_mode(st, (Mode)sel);
+    if (sel < 2 && st->seg_btn[sel])
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(st->seg_btn[sel]), TRUE);
 }
 
 /* ---------------------------------------------------------------------
@@ -570,6 +595,10 @@ static gboolean save_to_current_file(AppState *st) {
     char *text = gtk_text_buffer_get_text(st->buffer, &start, &end, FALSE);
     gboolean ok = g_file_set_contents(st->current_file, text, -1, NULL);
     g_free(text);
+    if (ok) {
+        st->dirty = FALSE;
+        update_title(st);
+    }
     return ok;
 }
 
@@ -595,6 +624,7 @@ static void new_file_cb(GtkButton *btn, gpointer user_data) {
     AppState *st = user_data;
     gtk_text_buffer_set_text(st->buffer, mode_template(st->mode), -1);
     g_clear_pointer(&st->current_file, g_free);
+    st->dirty = FALSE;
     update_title(st);
 }
 
@@ -615,6 +645,7 @@ static void open_file_finish(GObject *source, GAsyncResult *res,
         gtk_text_buffer_set_text(st->buffer, contents, len);
         g_free(st->current_file);
         st->current_file = g_strdup(path);
+        st->dirty = FALSE;
         update_title(st);
         g_free(contents);
     }
@@ -637,6 +668,8 @@ static void save_file_finish(GObject *source, GAsyncResult *res,
                               gpointer user_data) {
     AppState *st = user_data;
     GError *error = NULL;
+    gboolean close_after = st->close_after_save;
+    st->close_after_save = FALSE;
     GFile *file = gtk_file_dialog_save_finish(GTK_FILE_DIALOG(source), res, &error);
     if (!file) {
         g_clear_error(&error);
@@ -645,9 +678,10 @@ static void save_file_finish(GObject *source, GAsyncResult *res,
     g_free(st->current_file);
     st->current_file = g_file_get_path(file);
     if (st->current_file) mode_from_path(st, st->current_file);
-    save_to_current_file(st);
+    gboolean saved = save_to_current_file(st);
     update_title(st);
     g_object_unref(file);
+    if (close_after && saved) gtk_window_close(GTK_WINDOW(st->window));
 }
 
 static void save_dialog(AppState *st, const char *title) {
@@ -945,38 +979,58 @@ static void scan_nbc_line(AppState *st, const char *line) {
 
 typedef struct {
     AppState *st;
-    GDataInputStream *stream;
+    GInputStream *in;
+    GString *buf;
+    char chunk[512];
 } Pump;
 
-static void pump_next(GObject *src, GAsyncResult *res, gpointer user_data) {
-    Pump *p = user_data;
-    GError *error = NULL;
-    gsize len = 0;
-    char *line = g_data_input_stream_read_line_finish(p->stream, res, &len, &error);
-    if (!line) {
-        g_clear_error(&error);
-        g_object_unref(p->stream);
-        g_free(p);
-        return;
-    }
+static void pump_line(Pump *p, const char *line) {
     char *clean = g_utf8_make_valid(line, -1);
     g_strchomp(clean);
     log_output(p->st, clean, NULL);
     if (p->st->mode == MODE_NQC) scan_nqc_line(p->st, clean);
     else scan_nbc_line(p->st, clean);
     g_free(clean);
-    g_free(line);
-    g_data_input_stream_read_line_async(p->stream, G_PRIORITY_DEFAULT, NULL,
-                                        pump_next, p);
+}
+
+static void pump_next(GObject *src, GAsyncResult *res, gpointer user_data);
+
+static void pump_read(Pump *p) {
+    g_input_stream_read_async(p->in, p->chunk, sizeof(p->chunk),
+                              G_PRIORITY_DEFAULT, NULL, pump_next, p);
+}
+
+static void pump_next(GObject *src, GAsyncResult *res, gpointer user_data) {
+    Pump *p = user_data;
+    GError *error = NULL;
+    gssize n = g_input_stream_read_finish(G_INPUT_STREAM(src), res, &error);
+    g_clear_error(&error);
+    if (n <= 0) {
+        if (p->buf->len) pump_line(p, p->buf->str);
+        g_object_unref(p->in);
+        g_string_free(p->buf, TRUE);
+        g_free(p);
+        return;
+    }
+    if (p->st->on_chars) p->st->on_chars(p->chunk, (gsize)n, p->st->tap_data);
+    g_string_append_len(p->buf, p->chunk, n);
+    char *nl;
+    while ((nl = memchr(p->buf->str, '\n', p->buf->len)) != NULL) {
+        gsize used = (gsize)(nl - p->buf->str) + 1;
+        *nl = 0;
+        pump_line(p, p->buf->str);
+        g_string_erase(p->buf, 0, used);
+    }
+    pump_read(p);
 }
 
 static void start_pump(AppState *st, GInputStream *in) {
     if (!in) return;
     Pump *p = g_new0(Pump, 1);
     p->st = st;
-    p->stream = g_data_input_stream_new(in);
-    g_data_input_stream_read_line_async(p->stream, G_PRIORITY_DEFAULT, NULL,
-                                        pump_next, p);
+    p->in = g_object_ref(in);
+    p->buf = g_string_new(NULL);
+    pump_read(p);
 }
 
 typedef struct {
@@ -1015,6 +1069,14 @@ static gboolean finish_run_idle(gpointer data) {
         }
         set_busy(st, FALSE);
         g_clear_object(&st->proc);
+        if (st->on_done) {
+            void (*done)(int, gpointer) = st->on_done;
+            gpointer ud = st->tap_data;
+            st->on_chars = NULL;
+            st->on_done = NULL;
+            st->tap_data = NULL;
+            done(x->code, ud);
+        }
     }
     g_free(x);
     return G_SOURCE_REMOVE;
@@ -1915,6 +1977,20 @@ static void apply_omarchy_style(AppState *st) {
     const char *red       = theme_get(st, "red", "#F0609C");
     const char *blue      = theme_get(st, "blue", "#3B82F6");
 
+    /* Outside Omarchy the Dark / Light selector restyles the whole window,
+     * macOS style. (With an Omarchy theme the system colors win.) */
+    gboolean mac_light = !st->theme_colors && !st->dark_theme;
+    if (mac_light) {
+        accent = "#0A73F0";  bg = "#F5F5F7";  dark_bg = "#FFFFFF";  darker_bg = "#F6F6F7";
+        fg = "#1D1D1F";  muted_fg = "#6E6E73";  editor_fg = "#1D1D1F";  border_c = "#D9D9DE";
+        field_bg = "#ECECF0";  green = "#28B24B";  yellow = "#F5A623";
+        magenta = "#8B5CF6";  red = "#F25C9B";  blue = "#3B82F6";
+    }
+    if (!st->theme_colors) {
+        GtkSettings *gs = gtk_settings_get_default();
+        if (gs) g_object_set(gs, "gtk-application-prefer-dark-theme", !mac_light, NULL);
+    }
+
     char *accent_d  = darken_hex(accent, 0.75);
     char *green_d   = darken_hex(green, 0.8);
     char *yellow_d  = darken_hex(yellow, 0.8);
@@ -2113,6 +2189,53 @@ static void apply_omarchy_style(AppState *st) {
         ".statusbar { background-color: %s; border-top: 1px solid %s; }"
         ".card, .about-card { background-color: %s; }",
         border_c, fg, muted_fg, darker_bg, border_c, field_bg);
+
+    /* ---- macOS-style layout: sidebar, segmented control, sheets ---- */
+    g_string_append_printf(c,
+        ".sidebar { background-color: %s; padding: 14px 10px; border-right: 1px solid %s; }"
+        ".side-sec { font-size: 11px; font-weight: bold; color: %s; margin: 14px 8px 4px 8px; }"
+        ".side-brick { padding: 4px 8px; font-size: 13px; color: %s; }"
+        "button.side-btn { background: none; background-image: none; border: none; box-shadow: none; "
+        "  border-radius: 7px; padding: 5px 8px; color: %s; min-height: 0; }"
+        "button.side-btn:hover { background-color: %s; }"
+        ".side-sq { min-width: 16px; min-height: 16px; border-radius: 4px; }"
+        ".sq-blue { background-color: %s; } .sq-green { background-color: %s; }"
+        ".sq-orange { background-color: %s; } .sq-pink { background-color: %s; }"
+        ".sq-gray { background-color: %s; }"
+        ".seg { background-color: %s; border-radius: 9px; padding: 2px; }"
+        ".seg button { background: none; background-image: none; border: none; box-shadow: none; "
+        "  border-radius: 7px; padding: 4px 14px; min-height: 0; color: %s; font-size: 12px; }"
+        ".seg button:checked { background-color: %s; font-weight: bold; "
+        "  box-shadow: 0 1px 2px rgba(0,0,0,0.25); }",
+        field_bg, border_c, muted_fg, fg, fg, border_c,
+        blue, green, yellow, red, muted_fg,
+        border_c, fg, dark_bg);
+
+    g_string_append_printf(c,
+        "window.fw-win { background: none; }"
+        ".fw-sheet { background-color: %s; border-radius: 14px; padding: 26px 30px 22px 30px; "
+        "  border: 1px solid %s; }"
+        ".fw-title { font-size: 17px; font-weight: bold; color: %s; }"
+        ".fw-sub { font-size: 12.5px; color: %s; }"
+        "checkbutton.fw-opt { background-color: %s; border: 1px solid %s; border-radius: 10px; "
+        "  padding: 10px 12px; }"
+        "checkbutton.fw-opt:checked { border: 2px solid %s; padding: 9px 11px; }"
+        ".fw-opt-name { font-weight: bold; font-size: 13.5px; color: %s; }"
+        ".fw-opt-desc { font-size: 12px; color: %s; }"
+        ".fw-tag { background-color: rgba(40,178,75,0.15); color: %s; font-size: 10.5px; "
+        "  font-weight: bold; border-radius: 999px; padding: 3px 9px; }"
+        ".fw-check { background-color: %s; border-radius: 10px; padding: 10px 14px; color: %s; "
+        "  font-size: 12.5px; }"
+        ".fw-err { color: %s; font-size: 12px; }"
+        ".fw-warn { background-color: rgba(245,166,35,0.15); border: 1px solid rgba(245,166,35,0.6); "
+        "  border-radius: 10px; padding: 10px 14px; color: %s; font-size: 12.5px; }"
+        "progressbar.fw-bar trough { min-height: 10px; border-radius: 999px; background-color: %s; }"
+        "progressbar.fw-bar progress { min-height: 10px; border-radius: 999px; background-color: %s; }"
+        "menubutton.kebab-btn button, menubutton.kebab-btn button label, menubutton.kebab-btn arrow "
+        "  { color: %s; }",
+        bg, border_c, fg, muted_fg,
+        field_bg, border_c, accent, fg, muted_fg, green,
+        field_bg, fg, red, fg, border_c, accent, fg);
 
     if (st->css_provider) {
         gtk_style_context_remove_provider_for_display(
@@ -2448,7 +2571,9 @@ static void theme_changed_cb(GObject *dropdown, GParamSpec *pspec,
                               gpointer user_data) {
     AppState *st = user_data;
     guint sel = gtk_drop_down_get_selected(GTK_DROP_DOWN(dropdown));
-    apply_theme(st, sel == 0);
+    st->dark_theme = (sel == 0);
+    if (!st->theme_colors) apply_omarchy_style(st);
+    else apply_theme(st, sel == 0);
 }
 
 static void clear_console_cb(GtkButton *btn, gpointer user_data) {
@@ -2468,8 +2593,43 @@ static gboolean window_key_cb(GtkEventControllerKey *ctrl, guint keyval,
     return FALSE;
 }
 
+/* Unsaved changes: ask before closing (Save / Don't save / Cancel). */
+static void close_answer(GObject *src, GAsyncResult *res, gpointer user_data) {
+    AppState *st = user_data;
+    GError *error = NULL;
+    int choice = gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(src), res, &error);
+    g_clear_error(&error);
+    if (choice == 0) {                        /* Save */
+        if (st->current_file) {
+            if (save_to_current_file(st)) gtk_window_close(GTK_WINDOW(st->window));
+        } else {
+            st->close_after_save = TRUE;
+            save_dialog(st, "Save program");
+        }
+    } else if (choice == 1) {                 /* Don't save */
+        st->dirty = FALSE;
+        gtk_window_close(GTK_WINDOW(st->window));
+    }                                         /* Cancel: stay */
+}
+
 static gboolean window_close_cb(GtkWindow *w, gpointer user_data) {
     AppState *st = user_data;
+    if (st->dirty) {
+        char *base = st->current_file ? g_path_get_basename(st->current_file)
+                                      : g_strdup(T("untitled"));
+        char *msg = g_strdup_printf(T("Save changes to %s?"), base);
+        GtkAlertDialog *dlg = gtk_alert_dialog_new("%s", msg);
+        gtk_alert_dialog_set_detail(dlg, T("If you don't save, your changes are lost."));
+        const char *buttons[] = { T("Save"), T("Don't save"), T("Cancel"), NULL };
+        gtk_alert_dialog_set_buttons(dlg, buttons);
+        gtk_alert_dialog_set_default_button(dlg, 0);
+        gtk_alert_dialog_set_cancel_button(dlg, 2);
+        gtk_alert_dialog_choose(dlg, w, NULL, close_answer, st);
+        g_object_unref(dlg);
+        g_free(msg);
+        g_free(base);
+        return TRUE;                          /* keep the window for now */
+    }
     settings_save(st);
     if (st->running && st->proc) g_subprocess_force_exit(st->proc);
     return FALSE;
@@ -2510,6 +2670,15 @@ static gboolean device_poll(gpointer data) {
     gtk_widget_remove_css_class(st->dev_dot, "status-idle");
     gtk_widget_add_css_class(st->dev_dot,
         (nxt || tower) ? "status-ok" : "status-idle");
+    if (st->side_rcx_dot && st->side_nxt_dot) {
+        GtkWidget *dots[2] = { st->side_rcx_dot, st->side_nxt_dot };
+        gboolean on[2] = { tower, nxt };
+        for (int i = 0; i < 2; i++) {
+            gtk_widget_remove_css_class(dots[i], "status-ok");
+            gtk_widget_remove_css_class(dots[i], "status-idle");
+            gtk_widget_add_css_class(dots[i], on[i] ? "status-ok" : "status-idle");
+        }
+    }
     return G_SOURCE_CONTINUE;
 }
 
@@ -2751,6 +2920,453 @@ static void open_remote_cb(GtkButton *btn, gpointer user_data) {
  * Main window
  * --------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------
+ * Firmware sheet: choose the file, then watch the progress.
+ * nqc prints one '*' per 200-byte block, so counting them gives a real bar.
+ * --------------------------------------------------------------------- */
+
+typedef struct {
+    AppState *st;
+    GtkWidget *win, *stack;
+    GtkWidget *title, *subtitle;
+    GtkWidget *opt[3];
+    GtkWidget *other_desc;
+    char *other_path;
+    GtkWidget *err_label;
+    GtkWidget *bar, *pct_label, *eta_label, *warn, *warn_text;
+    GtkWidget *cancel_btn, *close_btn, *again_btn;
+    GString *seen;
+    int stars, total;
+    gint64 t0;
+    guint tick;
+    gboolean sending, cancelled;
+    char *file;
+} FwSheet;
+
+static char *find_firmware(const char *name) {
+    char *dirs[] = {
+        g_build_filename(g_get_home_dir(), ".local", "brickcode", "share", "firmware", NULL),
+        g_strdup("/usr/local/share/brickcode-studio/firmware"),
+        g_strdup("/usr/share/brickcode-studio/firmware"),
+        NULL };
+    char *found = NULL;
+    for (int i = 0; dirs[i]; i++) {
+        if (!found) {
+            char *p = g_build_filename(dirs[i], name, NULL);
+            if (g_file_test(p, G_FILE_TEST_IS_REGULAR)) found = p;
+            else g_free(p);
+        }
+        g_free(dirs[i]);
+    }
+    return found;
+}
+
+static void fw_set_head(FwSheet *f, const char *title, const char *sub) {
+    gtk_label_set_text(GTK_LABEL(f->title), title);
+    gtk_label_set_text(GTK_LABEL(f->subtitle), sub);
+}
+
+static void fw_update(FwSheet *f) {
+    if (!f->sending) return;
+    double frac = f->total > 0 ? MIN(1.0, (double)f->stars / f->total) : 0.0;
+    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(f->bar), frac);
+    char buf[160];
+    if (f->total > 0)
+        snprintf(buf, sizeof(buf), T("%d%%  ·  block %d of %d"),
+                 (int)(frac * 100), MIN(f->stars, f->total), f->total);
+    else
+        snprintf(buf, sizeof(buf), "%s", T("Starting…"));
+    gtk_label_set_text(GTK_LABEL(f->pct_label), buf);
+    buf[0] = 0;
+    if (f->total > 0 && f->stars >= 3) {
+        double elapsed = (g_get_monotonic_time() - f->t0) / 1e6;
+        int left = (int)(elapsed * (f->total - f->stars) / f->stars);
+        if (left < 60) snprintf(buf, sizeof(buf), "%s", T("less than a minute left"));
+        else snprintf(buf, sizeof(buf), T("about %d min left"), (left + 30) / 60);
+    }
+    gtk_label_set_text(GTK_LABEL(f->eta_label), buf);
+}
+
+static gboolean fw_tick(gpointer data) {
+    FwSheet *f = data;
+    fw_update(f);
+    if (!f->sending) { f->tick = 0; return G_SOURCE_REMOVE; }
+    return G_SOURCE_CONTINUE;
+}
+
+static void fw_chars(const char *data, gsize n, gpointer user) {
+    FwSheet *f = user;
+    for (gsize i = 0; i < n; i++) if (data[i] == '*') f->stars++;
+    if (f->total == 0 && f->seen->len < 2048) {
+        g_string_append_len(f->seen, data, n);
+        const char *b = strchr(f->seen->str, '[');
+        int bytes = 0;
+        if (b && sscanf(b, "[%d bytes]", &bytes) == 1 && bytes > 0)
+            f->total = (bytes + 199) / 200;
+    }
+    fw_update(f);
+}
+
+static void fw_done(int code, gpointer user) {
+    FwSheet *f = user;
+    f->sending = FALSE;
+    if (f->tick) { g_source_remove(f->tick); f->tick = 0; }
+    gtk_widget_set_visible(f->cancel_btn, FALSE);
+    gtk_widget_set_visible(f->close_btn, TRUE);
+    if (code == 0) {
+        gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(f->bar), 1.0);
+        gtk_label_set_text(GTK_LABEL(f->pct_label), "100%");
+        gtk_label_set_text(GTK_LABEL(f->eta_label), "");
+        gtk_widget_set_visible(f->warn, FALSE);
+        fw_set_head(f, T("Firmware installed"), f->file ? f->file : "");
+    } else {
+        gtk_label_set_text(GTK_LABEL(f->warn_text), f->cancelled
+            ? T("Stopped. The RCX may have no firmware now; install it again before using the brick.")
+            : T("The RCX did not answer. Keep it close to the tower and still, check the batteries, "
+                "unplug and plug the tower again, and try again."));
+        gtk_widget_set_visible(f->warn, TRUE);
+        gtk_widget_set_visible(f->again_btn, TRUE);
+        fw_set_head(f, f->cancelled ? T("Firmware stopped") : T("Firmware failed"),
+                    T("See the console for the details."));
+    }
+}
+
+static void fw_close_cb(GtkButton *b, gpointer user) {
+    FwSheet *f = user;
+    gtk_window_close(GTK_WINDOW(f->win));
+}
+
+static void fw_cancel_cb(GtkButton *b, gpointer user) {
+    FwSheet *f = user;
+    if (f->sending) {
+        f->cancelled = TRUE;
+        cancel_cb(NULL, f->st);
+    } else {
+        gtk_window_close(GTK_WINDOW(f->win));
+    }
+}
+
+static void fw_again_cb(GtkButton *b, gpointer user) {
+    FwSheet *f = user;
+    gtk_stack_set_visible_child_name(GTK_STACK(f->stack), "choose");
+    gtk_widget_set_visible(f->again_btn, FALSE);
+    gtk_widget_set_visible(f->close_btn, FALSE);
+    gtk_widget_set_visible(f->cancel_btn, TRUE);
+    fw_set_head(f, T("Install RCX firmware"),
+        T("The RCX needs its firmware once, and loses it when the batteries are removed. "
+          "Choose the file for your brick."));
+}
+
+static void fw_install_cb(GtkButton *b, gpointer user) {
+    FwSheet *f = user;
+    AppState *st = f->st;
+    int sel = 0;
+    for (int i = 0; i < 3; i++)
+        if (gtk_check_button_get_active(GTK_CHECK_BUTTON(f->opt[i]))) sel = i;
+    const char *target = sel == 0 ? "RCX2" : sel == 1 ? "RCX" : NULL;
+    char *path = sel == 0 ? find_firmware("firm0328.lgo")
+               : sel == 1 ? find_firmware("firm0309.lgo")
+               : g_strdup(f->other_path);
+    if (!path || !g_file_test(path, G_FILE_TEST_IS_REGULAR)) {
+        gtk_label_set_text(GTK_LABEL(f->err_label), T("That firmware file was not found."));
+        g_free(path);
+        return;
+    }
+    if (target)
+        for (guint i = 0; i < G_N_ELEMENTS(NQC_TARGETS); i++)
+            if (strcmp(NQC_TARGETS[i].name, target) == 0)
+                gtk_drop_down_set_selected(GTK_DROP_DOWN(st->target_dropdown), i);
+    gtk_editable_set_text(GTK_EDITABLE(st->fw_entry), path);
+
+    g_string_truncate(f->seen, 0);
+    f->stars = f->total = 0;
+    f->cancelled = FALSE;
+    f->t0 = g_get_monotonic_time();
+    st->on_chars = fw_chars;
+    st->on_done = fw_done;
+    st->tap_data = f;
+    log_output(st, "Flashing firmware takes a while. Keep the RCX pointed at the "
+                   "tower and do not move it.", "info");
+    GPtrArray *args = g_ptr_array_new();
+    g_ptr_array_add(args, "-firmware");
+    g_ptr_array_add(args, path);
+    gboolean ok = run_nqc(st, args, TIMEOUT_FIRMWARE, "Firmware sent.", "Sending firmware…");
+    g_ptr_array_free(args, TRUE);
+    if (!ok) {
+        st->on_chars = NULL; st->on_done = NULL; st->tap_data = NULL;
+        gtk_label_set_text(GTK_LABEL(f->err_label),
+            T("Could not start nqc. See the console."));
+        g_free(path);
+        return;
+    }
+    g_free(f->file);
+    char *base = g_path_get_basename(path);
+    f->file = g_strdup_printf("%s → %s", base,
+        NQC_TARGETS[gtk_drop_down_get_selected(GTK_DROP_DOWN(st->target_dropdown))].name);
+    g_free(base);
+    g_free(path);
+    f->sending = TRUE;
+    gtk_label_set_text(GTK_LABEL(f->err_label), "");
+    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(f->bar), 0.0);
+    gtk_label_set_text(GTK_LABEL(f->warn_text),
+        T("Do not move the RCX. Keep it pointed at the tower until this window says it is done. "
+          "This takes about 3 to 5 minutes."));
+    gtk_widget_set_visible(f->warn, TRUE);
+    gtk_widget_set_visible(f->cancel_btn, TRUE);
+    gtk_widget_set_visible(f->close_btn, FALSE);
+    gtk_widget_set_visible(f->again_btn, FALSE);
+    fw_set_head(f, T("Installing firmware…"), f->file);
+    gtk_stack_set_visible_child_name(GTK_STACK(f->stack), "send");
+    fw_update(f);
+    f->tick = g_timeout_add_seconds(1, fw_tick, f);
+}
+
+static void fw_other_picked(GObject *src, GAsyncResult *res, gpointer user) {
+    FwSheet *f = user;
+    GError *error = NULL;
+    GFile *file = gtk_file_dialog_open_finish(GTK_FILE_DIALOG(src), res, &error);
+    g_clear_error(&error);
+    if (!file) {
+        if (!f->other_path) gtk_check_button_set_active(GTK_CHECK_BUTTON(f->opt[0]), TRUE);
+        return;
+    }
+    g_free(f->other_path);
+    f->other_path = g_file_get_path(file);
+    g_object_unref(file);
+    char *base = g_path_get_basename(f->other_path);
+    gtk_label_set_text(GTK_LABEL(f->other_desc), base);
+    g_free(base);
+}
+
+static void fw_other_toggled(GtkCheckButton *cb, gpointer user) {
+    FwSheet *f = user;
+    if (!gtk_check_button_get_active(cb) || f->other_path) return;
+    GtkFileDialog *dialog = gtk_file_dialog_new();
+    gtk_file_dialog_set_title(dialog, "Select firmware file");
+    GtkFileFilter *flt = gtk_file_filter_new();
+    gtk_file_filter_set_name(flt, "RCX firmware (*.lgo, *.srec)");
+    gtk_file_filter_add_pattern(flt, "*.lgo");
+    gtk_file_filter_add_pattern(flt, "*.srec");
+    GListStore *store = g_list_store_new(GTK_TYPE_FILE_FILTER);
+    g_list_store_append(store, flt);
+    g_object_unref(flt);
+    gtk_file_dialog_set_filters(dialog, G_LIST_MODEL(store));
+    g_object_unref(store);
+    gtk_file_dialog_open(dialog, GTK_WINDOW(f->win), NULL, fw_other_picked, f);
+}
+
+static gboolean fw_close_request(GtkWindow *w, gpointer user) {
+    FwSheet *f = user;
+    if (f->sending) {            /* never leave nqc running behind a closed sheet */
+        f->cancelled = TRUE;
+        cancel_cb(NULL, f->st);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static void fw_destroy(GtkWidget *w, gpointer user) {
+    FwSheet *f = user;
+    if (f->st->tap_data == f) {
+        f->st->on_chars = NULL; f->st->on_done = NULL; f->st->tap_data = NULL;
+    }
+    if (f->tick) g_source_remove(f->tick);
+    g_string_free(f->seen, TRUE);
+    g_free(f->other_path);
+    g_free(f->file);
+    g_free(f);
+}
+
+static gboolean fw_key_cb(GtkEventControllerKey *c, guint keyval, guint code,
+                           GdkModifierType state, gpointer user) {
+    FwSheet *f = user;
+    if (keyval == GDK_KEY_Escape && !f->sending) {
+        gtk_window_close(GTK_WINDOW(f->win));
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static GtkWidget *fw_option(const char *name, const char *desc, const char *tag,
+                             GtkWidget **desc_out, GtkWidget *group) {
+    GtkWidget *cb = gtk_check_button_new();
+    gtk_widget_add_css_class(cb, "fw-opt");
+    if (group) gtk_check_button_set_group(GTK_CHECK_BUTTON(cb), GTK_CHECK_BUTTON(group));
+    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    GtkWidget *col = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_hexpand(col, TRUE);
+    GtkWidget *n = gtk_label_new(name);
+    gtk_widget_add_css_class(n, "fw-opt-name");
+    gtk_label_set_xalign(GTK_LABEL(n), 0.0);
+    GtkWidget *d = gtk_label_new(desc);
+    gtk_widget_add_css_class(d, "fw-opt-desc");
+    gtk_label_set_xalign(GTK_LABEL(d), 0.0);
+    gtk_box_append(GTK_BOX(col), n);
+    gtk_box_append(GTK_BOX(col), d);
+    gtk_box_append(GTK_BOX(row), col);
+    if (tag) {
+        GtkWidget *t = gtk_label_new(tag);
+        gtk_widget_add_css_class(t, "fw-tag");
+        gtk_widget_set_valign(t, GTK_ALIGN_CENTER);
+        gtk_box_append(GTK_BOX(row), t);
+    }
+    gtk_check_button_set_child(GTK_CHECK_BUTTON(cb), row);
+    if (desc_out) *desc_out = d;
+    return cb;
+}
+
+static void open_firmware_sheet_cb(GtkButton *btn, gpointer user_data) {
+    AppState *st = user_data;
+    if (st->running) {
+        log_output(st, "A command is already running. Wait for it or press Cancel.", "err");
+        return;
+    }
+    FwSheet *f = g_new0(FwSheet, 1);
+    f->st = st;
+    f->seen = g_string_new(NULL);
+
+    f->win = gtk_window_new();
+    gtk_window_set_transient_for(GTK_WINDOW(f->win), GTK_WINDOW(st->window));
+    gtk_window_set_modal(GTK_WINDOW(f->win), TRUE);
+    gtk_window_set_decorated(GTK_WINDOW(f->win), FALSE);
+    gtk_window_set_resizable(GTK_WINDOW(f->win), FALSE);
+    gtk_window_set_default_size(GTK_WINDOW(f->win), 580, -1);
+    gtk_widget_add_css_class(f->win, "fw-win");
+
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 14);
+    gtk_widget_add_css_class(box, "fw-sheet");
+    gtk_window_set_child(GTK_WINDOW(f->win), box);
+
+    GtkWidget *head = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
+    gtk_box_append(GTK_BOX(head), make_icon_widget(56));
+    GtkWidget *hcol = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_set_valign(hcol, GTK_ALIGN_CENTER);
+    gtk_widget_set_hexpand(hcol, TRUE);
+    f->title = gtk_label_new("Install RCX firmware");
+    gtk_widget_add_css_class(f->title, "fw-title");
+    gtk_label_set_xalign(GTK_LABEL(f->title), 0.0);
+    f->subtitle = gtk_label_new(
+        "The RCX needs its firmware once, and loses it when the batteries are removed. "
+        "Choose the file for your brick.");
+    gtk_widget_add_css_class(f->subtitle, "fw-sub");
+    gtk_label_set_xalign(GTK_LABEL(f->subtitle), 0.0);
+    gtk_label_set_wrap(GTK_LABEL(f->subtitle), TRUE);
+    gtk_label_set_max_width_chars(GTK_LABEL(f->subtitle), 56);
+    gtk_box_append(GTK_BOX(hcol), f->title);
+    gtk_box_append(GTK_BOX(hcol), f->subtitle);
+    gtk_box_append(GTK_BOX(head), hcol);
+    gtk_box_append(GTK_BOX(box), head);
+
+    f->stack = gtk_stack_new();
+    gtk_box_append(GTK_BOX(box), f->stack);
+
+    /* ---- page 1: choose ---- */
+    GtkWidget *p1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    char *fw1 = find_firmware("firm0328.lgo");
+    char *fw2 = find_firmware("firm0309.lgo");
+    f->opt[0] = fw_option("firm0328.lgo", fw1 ? "RCX 2.0 · target RCX2" : "not found in the install folder",
+                          "Recommended", NULL, NULL);
+    f->opt[1] = fw_option("firm0309.lgo", fw2 ? "RCX 1.0 · target RCX" : "not found in the install folder",
+                          NULL, NULL, f->opt[0]);
+    f->opt[2] = fw_option("Choose another .lgo file…", "For example a fast firmware or a newer one",
+                          NULL, &f->other_desc, f->opt[0]);
+    gtk_widget_set_sensitive(f->opt[0], fw1 != NULL);
+    gtk_widget_set_sensitive(f->opt[1], fw2 != NULL);
+    gtk_check_button_set_active(GTK_CHECK_BUTTON(f->opt[fw1 ? 0 : fw2 ? 1 : 2]), TRUE);
+    g_signal_connect(f->opt[2], "toggled", G_CALLBACK(fw_other_toggled), f);
+    for (int i = 0; i < 3; i++) gtk_box_append(GTK_BOX(p1), f->opt[i]);
+    g_free(fw1);
+    g_free(fw2);
+
+    GtkWidget *check = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_add_css_class(check, "fw-check");
+    gtk_box_append(GTK_BOX(check), gtk_label_new("•  New batteries in the RCX"));
+    gtk_box_append(GTK_BOX(check), gtk_label_new("•  RCX on, pointing at the tower, close and still"));
+    const char *dl = gtk_label_get_text(GTK_LABEL(st->dev_label));
+    const char *port = gtk_editable_get_text(GTK_EDITABLE(st->tower_entry));
+    char tline[200];
+    if (strstr(dl, "tower"))
+        snprintf(tline, sizeof(tline), T("✓  Tower connected · port %s"),
+                 (port && *port) ? port : "auto");
+    else
+        snprintf(tline, sizeof(tline), "%s", T("⚠  Tower not detected: check the USB cable"));
+    GtkWidget *tl = gtk_label_new(tline);
+    gtk_box_append(GTK_BOX(check), tl);
+    for (GtkWidget *c = gtk_widget_get_first_child(check); c; c = gtk_widget_get_next_sibling(c))
+        gtk_label_set_xalign(GTK_LABEL(c), 0.0);
+    gtk_box_append(GTK_BOX(p1), check);
+
+    f->err_label = gtk_label_new("");
+    gtk_widget_add_css_class(f->err_label, "fw-err");
+    gtk_label_set_xalign(GTK_LABEL(f->err_label), 0.0);
+    gtk_box_append(GTK_BOX(p1), f->err_label);
+
+    GtkWidget *b1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_widget_set_halign(b1, GTK_ALIGN_END);
+    GtkWidget *c1 = gtk_button_new_with_label("Cancel");
+    gtk_widget_add_css_class(c1, "browse-btn");
+    GtkWidget *go = gtk_button_new_with_label("Install firmware");
+    gtk_widget_add_css_class(go, "pill-btn");
+    gtk_widget_add_css_class(go, "pill-blue");
+    g_signal_connect(c1, "clicked", G_CALLBACK(fw_close_cb), f);
+    g_signal_connect(go, "clicked", G_CALLBACK(fw_install_cb), f);
+    gtk_box_append(GTK_BOX(b1), c1);
+    gtk_box_append(GTK_BOX(b1), go);
+    gtk_box_append(GTK_BOX(p1), b1);
+    gtk_stack_add_named(GTK_STACK(f->stack), p1, "choose");
+
+    /* ---- page 2: sending ---- */
+    GtkWidget *p2 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    f->bar = gtk_progress_bar_new();
+    gtk_widget_add_css_class(f->bar, "fw-bar");
+    gtk_box_append(GTK_BOX(p2), f->bar);
+    GtkWidget *info = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    f->pct_label = gtk_label_new("");
+    gtk_widget_add_css_class(f->pct_label, "fw-sub");
+    gtk_widget_set_hexpand(f->pct_label, TRUE);
+    gtk_label_set_xalign(GTK_LABEL(f->pct_label), 0.0);
+    f->eta_label = gtk_label_new("");
+    gtk_widget_add_css_class(f->eta_label, "fw-sub");
+    gtk_box_append(GTK_BOX(info), f->pct_label);
+    gtk_box_append(GTK_BOX(info), f->eta_label);
+    gtk_box_append(GTK_BOX(p2), info);
+    f->warn = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_add_css_class(f->warn, "fw-warn");
+    f->warn_text = gtk_label_new("");
+    gtk_label_set_wrap(GTK_LABEL(f->warn_text), TRUE);
+    gtk_label_set_xalign(GTK_LABEL(f->warn_text), 0.0);
+    gtk_label_set_max_width_chars(GTK_LABEL(f->warn_text), 60);
+    gtk_box_append(GTK_BOX(f->warn), f->warn_text);
+    gtk_box_append(GTK_BOX(p2), f->warn);
+    GtkWidget *b2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_widget_set_halign(b2, GTK_ALIGN_END);
+    f->cancel_btn = gtk_button_new_with_label("Cancel");
+    gtk_widget_add_css_class(f->cancel_btn, "browse-btn");
+    f->again_btn = gtk_button_new_with_label("Try again");
+    gtk_widget_add_css_class(f->again_btn, "browse-btn");
+    f->close_btn = gtk_button_new_with_label("Close");
+    gtk_widget_add_css_class(f->close_btn, "pill-btn");
+    gtk_widget_add_css_class(f->close_btn, "pill-blue");
+    g_signal_connect(f->cancel_btn, "clicked", G_CALLBACK(fw_cancel_cb), f);
+    g_signal_connect(f->again_btn, "clicked", G_CALLBACK(fw_again_cb), f);
+    g_signal_connect(f->close_btn, "clicked", G_CALLBACK(fw_close_cb), f);
+    gtk_box_append(GTK_BOX(b2), f->again_btn);
+    gtk_box_append(GTK_BOX(b2), f->cancel_btn);
+    gtk_box_append(GTK_BOX(b2), f->close_btn);
+    gtk_widget_set_visible(f->again_btn, FALSE);
+    gtk_widget_set_visible(f->close_btn, FALSE);
+    gtk_box_append(GTK_BOX(p2), b2);
+    gtk_stack_add_named(GTK_STACK(f->stack), p2, "send");
+    gtk_stack_set_visible_child_name(GTK_STACK(f->stack), "choose");
+
+    GtkEventController *kc = gtk_event_controller_key_new();
+    g_signal_connect(kc, "key-pressed", G_CALLBACK(fw_key_cb), f);
+    gtk_widget_add_controller(f->win, kc);
+    g_signal_connect(f->win, "close-request", G_CALLBACK(fw_close_request), f);
+    g_signal_connect(f->win, "destroy", G_CALLBACK(fw_destroy), f);
+    gtk_window_present(GTK_WINDOW(f->win));
+}
+
 static void lang_changed_cb(GObject *dropdown, GParamSpec *pspec,
                              gpointer user_data) {
     AppState *st = user_data;
@@ -2770,6 +3386,55 @@ static void lang_changed_cb(GObject *dropdown, GParamSpec *pspec,
     update_title(st);
     set_status(st, "Ready.", "status-ok");
     device_poll(st);
+}
+
+/* ---- Sidebar helpers ---- */
+static GtkWidget *side_button(const char *label, const char *sq_class,
+                              GCallback cb, gpointer data) {
+    GtkWidget *b = gtk_button_new();
+    gtk_widget_add_css_class(b, "side-btn");
+    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 9);
+    GtkWidget *sq = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_add_css_class(sq, "side-sq");
+    gtk_widget_add_css_class(sq, sq_class);
+    gtk_widget_set_valign(sq, GTK_ALIGN_CENTER);
+    GtkWidget *l = gtk_label_new(label);
+    gtk_label_set_xalign(GTK_LABEL(l), 0.0);
+    gtk_box_append(GTK_BOX(row), sq);
+    gtk_box_append(GTK_BOX(row), l);
+    gtk_button_set_child(GTK_BUTTON(b), row);
+    g_signal_connect(b, "clicked", cb, data);
+    return b;
+}
+
+static GtkWidget *side_section(const char *label) {
+    GtkWidget *l = gtk_label_new(label);
+    gtk_widget_add_css_class(l, "side-sec");
+    gtk_label_set_xalign(GTK_LABEL(l), 0.0);
+    return l;
+}
+
+static GtkWidget *side_brick_row(const char *label, GtkWidget **dot_out) {
+    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 9);
+    gtk_widget_add_css_class(row, "side-brick");
+    GtkWidget *dot = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_add_css_class(dot, "status-dot");
+    gtk_widget_add_css_class(dot, "status-idle");
+    gtk_widget_set_valign(dot, GTK_ALIGN_CENTER);
+    gtk_widget_set_size_request(dot, 10, 10);
+    GtkWidget *l = gtk_label_new(label);
+    gtk_label_set_xalign(GTK_LABEL(l), 0.0);
+    gtk_box_append(GTK_BOX(row), dot);
+    gtk_box_append(GTK_BOX(row), l);
+    *dot_out = dot;
+    return row;
+}
+
+static void seg_toggled_cb(GtkToggleButton *tb, gpointer user_data) {
+    AppState *st = user_data;
+    if (!gtk_toggle_button_get_active(tb)) return;
+    guint idx = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(tb), "idx"));
+    gtk_drop_down_set_selected(GTK_DROP_DOWN(st->mode_dropdown), idx);
 }
 
 static void activate(GtkApplication *app, gpointer user_data) {
@@ -2796,7 +3461,7 @@ static void activate(GtkApplication *app, gpointer user_data) {
     watch_omarchy_theme(st);
 
     st->window = gtk_application_window_new(app);
-    gtk_window_set_default_size(GTK_WINDOW(st->window), 1280, 820);
+    gtk_window_set_default_size(GTK_WINDOW(st->window), 1400, 860);
 
     GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_window_set_child(GTK_WINDOW(st->window), root);
@@ -2838,11 +3503,6 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_box_append(GTK_BOX(tab), kebab);
     gtk_box_append(GTK_BOX(topbar), tab);
 
-    GtkWidget *btn_new = gtk_button_new_with_label("+");
-    gtk_widget_add_css_class(btn_new, "plus-btn");
-    gtk_widget_set_tooltip_text(btn_new, "New program");
-    gtk_box_append(GTK_BOX(topbar), btn_new);
-
     GtkWidget *top_spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_widget_set_hexpand(top_spacer, TRUE);
     gtk_box_append(GTK_BOX(topbar), top_spacer);
@@ -2851,7 +3511,23 @@ static void activate(GtkApplication *app, gpointer user_data) {
     st->mode_dropdown = gtk_drop_down_new_from_strings(mode_opts);
     gtk_widget_add_css_class(st->mode_dropdown, "mode-dd");
     gtk_widget_set_valign(st->mode_dropdown, GTK_ALIGN_CENTER);
+    gtk_widget_set_visible(st->mode_dropdown, FALSE);   /* kept as the state holder */
     gtk_box_append(GTK_BOX(topbar), st->mode_dropdown);
+
+    GtkWidget *seg = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_add_css_class(seg, "seg");
+    gtk_widget_set_valign(seg, GTK_ALIGN_CENTER);
+    for (guint i = 0; i < 2; i++) {
+        st->seg_btn[i] = gtk_toggle_button_new_with_label(MODES[i].name);
+        g_object_set_data(G_OBJECT(st->seg_btn[i]), "idx", GUINT_TO_POINTER(i));
+        if (i) gtk_toggle_button_set_group(GTK_TOGGLE_BUTTON(st->seg_btn[1]),
+                                            GTK_TOGGLE_BUTTON(st->seg_btn[0]));
+        gtk_box_append(GTK_BOX(seg), st->seg_btn[i]);
+    }
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(st->seg_btn[0]), TRUE);
+    for (guint i = 0; i < 2; i++)
+        g_signal_connect(st->seg_btn[i], "toggled", G_CALLBACK(seg_toggled_cb), st);
+    gtk_box_append(GTK_BOX(topbar), seg);
 
     const char *lang_opts[] = { "English", "Español", NULL };
     st->lang_dropdown = gtk_drop_down_new_from_strings(lang_opts);
@@ -3139,6 +3815,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
         chip_button("Test brick", "qa-green", G_CALLBACK(test_brick_cb), st));
     gtk_box_append(GTK_BOX(row5),
         chip_button("Remote", "qa-blue", G_CALLBACK(open_remote_cb), st));
+    gtk_box_append(GTK_BOX(row5),
+        chip_button("Firmware…", "qa-orange", G_CALLBACK(open_firmware_sheet_cb), st));
     gtk_box_append(GTK_BOX(st->utils_nqc), row5);
     gtk_box_append(GTK_BOX(utils_content), st->utils_nqc);
 
@@ -3189,15 +3867,54 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(drawer_scroll),
                                    GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(drawer_scroll), drawer_box);
-    gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(drawer_scroll), 380);
-    gtk_scrolled_window_set_max_content_width(GTK_SCROLLED_WINDOW(drawer_scroll), 380);
-    gtk_widget_set_size_request(drawer_scroll, 380, -1);
+    gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(drawer_scroll), 330);
+    gtk_scrolled_window_set_max_content_width(GTK_SCROLLED_WINDOW(drawer_scroll), 330);
+    gtk_widget_set_size_request(drawer_scroll, 330, -1);
     gtk_widget_set_hexpand(drawer_scroll, FALSE);
     st->drawer = drawer_scroll;
-    gtk_widget_set_visible(st->drawer, FALSE);
+    gtk_widget_set_visible(st->drawer, TRUE);
+
+    /* ---- Left sidebar: bricks and tools ---- */
+    GtkWidget *sidebar = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_add_css_class(sidebar, "sidebar");
+    gtk_widget_set_size_request(sidebar, 210, -1);
+    gtk_box_append(GTK_BOX(sidebar), side_section("Bricks"));
+    gtk_box_append(GTK_BOX(sidebar), side_brick_row("RCX tower", &st->side_rcx_dot));
+    gtk_box_append(GTK_BOX(sidebar), side_brick_row("NXT", &st->side_nxt_dot));
+    gtk_box_append(GTK_BOX(sidebar), side_section("Tools"));
+
+    st->side_nqc_tools = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_box_append(GTK_BOX(st->side_nqc_tools),
+        side_button("Remote", "sq-orange", G_CALLBACK(open_remote_cb), st));
+    GtkWidget *dl_btn = side_button("Datalog", "sq-pink", G_CALLBACK(nqc_util_cb), st);
+    g_object_set_data(G_OBJECT(dl_btn), "nqc-flag", (gpointer)"-datalog");
+    gtk_box_append(GTK_BOX(st->side_nqc_tools), dl_btn);
+    gtk_box_append(GTK_BOX(st->side_nqc_tools),
+        side_button("Firmware…", "sq-gray", G_CALLBACK(open_firmware_sheet_cb), st));
+    gtk_box_append(GTK_BOX(st->side_nqc_tools),
+        side_button("Test brick", "sq-green", G_CALLBACK(test_brick_cb), st));
+    gtk_box_append(GTK_BOX(st->side_nqc_tools),
+        side_button("Test tools", "sq-blue", G_CALLBACK(test_tools_cb), st));
+    gtk_box_append(GTK_BOX(sidebar), st->side_nqc_tools);
+
+    st->side_nxc_tools = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_box_append(GTK_BOX(st->side_nxc_tools),
+        side_button("NXT Explorer", "sq-blue", G_CALLBACK(open_explorer_cb), st));
+    gtk_box_append(GTK_BOX(st->side_nxc_tools),
+        side_button("Test NXT", "sq-green", G_CALLBACK(test_brick_cb), st));
+    gtk_box_append(GTK_BOX(st->side_nxc_tools),
+        side_button("Test tools", "sq-gray", G_CALLBACK(test_tools_cb), st));
+    gtk_box_append(GTK_BOX(sidebar), st->side_nxc_tools);
+
+    GtkWidget *side_fill = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_vexpand(side_fill, TRUE);
+    gtk_box_append(GTK_BOX(sidebar), side_fill);
+    gtk_box_append(GTK_BOX(sidebar),
+        side_button("Settings", "sq-gray", G_CALLBACK(toggle_drawer_cb), st));
 
     GtkWidget *body = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_widget_set_vexpand(body, TRUE);
+    gtk_box_append(GTK_BOX(body), sidebar);
     gtk_box_append(GTK_BOX(body), center);
     gtk_box_append(GTK_BOX(body), edge);
     gtk_box_append(GTK_BOX(body), st->drawer);
@@ -3262,6 +3979,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
         g_free(s);
     }
     g_key_file_free(kf);
+    if (!have_settings && !st->theme_colors)
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(st->theme_dropdown), 1);   /* Light */
     gtk_label_set_text(GTK_LABEL(st->target_note),
         NQC_TARGETS[gtk_drop_down_get_selected(GTK_DROP_DOWN(st->target_dropdown))].desc);
     gtk_revealer_set_reveal_child(GTK_REVEALER(st->bt_revealer),
@@ -3269,7 +3988,6 @@ static void activate(GtkApplication *app, gpointer user_data) {
 
     /* ---- Signals ---- */
     g_signal_connect(st->buffer, "changed", G_CALLBACK(on_buffer_changed), st);
-    g_signal_connect(btn_new, "clicked", G_CALLBACK(new_file_cb), st);
     g_signal_connect(btn_clear, "clicked", G_CALLBACK(clear_console_cb), st);
     g_signal_connect(st->cancel_btn, "clicked", G_CALLBACK(cancel_cb), st);
     g_signal_connect(st->btn_run, "clicked", G_CALLBACK(compile_run_cb), st);
@@ -3293,9 +4011,12 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_text_buffer_set_text(st->buffer, mode_template(st->mode), -1);
     gtk_drop_down_set_selected(GTK_DROP_DOWN(st->mode_dropdown), start_mode);
     apply_mode(st, start_mode);
-    apply_theme(st, gtk_drop_down_get_selected(GTK_DROP_DOWN(st->theme_dropdown)) == 0);
+    st->dark_theme = gtk_drop_down_get_selected(GTK_DROP_DOWN(st->theme_dropdown)) == 0;
+    if (!st->theme_colors) apply_omarchy_style(st);
+    else apply_theme(st, st->dark_theme);
 
     update_line_numbers(st);
+    st->dirty = FALSE;
     update_title(st);
     gtk_window_present(GTK_WINDOW(st->window));
 }

@@ -19,7 +19,7 @@ The interface is available in **English and Spanish** (selector in the top bar).
 - Device chip: shows whether an NXT or an RCX tower is connected
 - RCX tools: tower port detection, firmware, datalog, IR range, auto-shutoff
 - NXT Explorer: files, battery and firmware over USB
-- Remote (RCX): the buttons of the LEGO IR remote (messages, motors A/B/C, programs P1-P5, stop, sound), sent with `nqc -remote`. The motor buttons run the motor while held, like the real remote.
+- Remote (RCX): the buttons of the LEGO IR remote (messages, motors A/B/C, programs P1-P5, stop, sound), sent with `nqc`. The motor buttons run the motor while held, like the real remote. The installers patch nqc at build time so it does not wait for a reply the RCX never sends to remote commands (needed for the motor to keep running). Tested on a Mac mini M4 with an RCX 2.0.
 
 ## Install
 
@@ -112,6 +112,11 @@ The target menu in BrickCode Studio shows the matching firmware file next to eac
 
 Open the Brick utilities in the drawer and use **Test tools** (checks that `nqc` and `nbc` are found) and
 **Test brick** / **Test NXT** (asks the brick for its version or battery, so you know the USB link works).
+
+**Firmware fails with `!!!!` and `firmware transfer failed (-3)`.** The `!` marks are nqc retries and `-3` means the RCX did not answer.
+Keep the RCX close to the tower and still, check the batteries, unplug and plug the tower again, and retry.
+This failed once on a Mac mini M4 with a freshly reset RCX and worked on a later try, so the cause is not fully known.
+If it keeps failing, load the firmware once with another tool or computer; BrickCode Studio works with it afterwards.
 
 On Linux the RCX tower port must be `usb` (not `/dev/usb/legousbtower0`); the **Detect** button sets it for you.
 If you get a permission error, add your user to the group that owns the tower (`dialout` or `plugdev`, depending on the distro) and log in again.
