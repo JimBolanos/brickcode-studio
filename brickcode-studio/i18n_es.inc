@@ -153,7 +153,7 @@
 { "IR tower (USB / serial)", "Torre IR (USB / serial)" },
 { "USB (libusb) · Bluetooth on Linux", "USB (libusb) · Bluetooth en Linux" },
 { "Custom (GRegex)", "Propio (GRegex)" },
-{ "Dark · follows Omarchy on Linux", "Oscuro · sigue a Omarchy en Linux" },
+{ "Light · Dark · follows Omarchy on Linux", "Claro · Oscuro · sigue a Omarchy en Linux" },
 { "MIT License", "Licencia MIT" },
 { "Independent project - not affiliated with or endorsed\nby the LEGO Group. LEGO and MINDSTORMS are trademarks\nof the LEGO Group.", "Proyecto independiente - sin afiliación ni respaldo\ndel Grupo LEGO. LEGO y MINDSTORMS son marcas\nregistradas del Grupo LEGO." },
 { "Close", "Cerrar" },

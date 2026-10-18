@@ -39,7 +39,7 @@
 #include <stdlib.h>
 
 #define APP_NAME     "BrickCode Studio"
-#define APP_VERSION  "2.1.0"
+#define APP_VERSION  "2.1.1"
 
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
@@ -2456,7 +2456,7 @@ static void about_cb(GtkButton *btn, gpointer user_data) {
         {"NQC link",     "IR tower (USB / serial)"},
         {"NXC link",     "USB (libusb) · Bluetooth on Linux"},
         {"Highlighting", "Custom (GRegex)"},
-        {"Theme",        "Dark · follows Omarchy on Linux"},
+        {"Theme",        "Light · Dark · follows Omarchy on Linux"},
     };
     for (guint i = 0; i < G_N_ELEMENTS(rows); i++) {
         GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
@@ -2484,6 +2484,12 @@ static void about_cb(GtkButton *btn, gpointer user_data) {
     gtk_widget_add_css_class(github, "about-link");
     gtk_widget_set_halign(github, GTK_ALIGN_CENTER);
     gtk_box_append(GTK_BOX(card), github);
+
+    GtkWidget *rebrickable = gtk_link_button_new_with_label(
+        "https://rebrickable.com/users/jimmy.bolanos/", "rebrickable.com/users/jimmy.bolanos");
+    gtk_widget_add_css_class(rebrickable, "about-link");
+    gtk_widget_set_halign(rebrickable, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(card), rebrickable);
 
     GtkWidget *copyright_label = gtk_label_new("© 2026 Jim Bolaños");
     gtk_widget_add_css_class(copyright_label, "about-copyright");
