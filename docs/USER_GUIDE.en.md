@@ -11,6 +11,8 @@ It supports two languages, switched with the **NQC / NXC** selector in the top b
 - **NQC** for the RCX and the Scout. `nqc` compiles the program and sends it through the USB tower (infrared).
 - **NXC** for the NXT. `nbc` compiles it and the app itself uploads it over USB, with no system driver.
 
+**What you need to connect.** The RCX and the Scout are programmed through the **LEGO USB Tower** (infrared); the NXT is programmed with a **USB cable** straight to the computer.
+
 The app is only an interface: it uses `nqc` and `nbc` underneath, so both must be installed. It works on Linux (Arch/Omarchy, Fedora, Mint and others) and on macOS with Apple Silicon. The interface is available in English and Spanish.
 
 ![NQC mode](screenshot-nqc-en.png)

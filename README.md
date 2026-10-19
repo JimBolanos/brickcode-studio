@@ -20,6 +20,15 @@ The interface is available in **English and Spanish** (selector in the top bar).
 
 Full guide: [English](docs/USER_GUIDE.en.md) · [Español](docs/USER_GUIDE.es.md)
 
+## What you need to connect
+
+| Brick | How it connects to the computer |
+| --- | --- |
+| RCX, Scout (and CyberMaster, Spybotics) | **LEGO USB Tower** (infrared). The program is sent through the tower, so the brick must be on, close to the tower and pointing at it. |
+| NXT | **USB cable** straight to the computer. No tower needed. |
+
+The LEGO USB Tower is not included with this software; you need the original one that came with the RCX / Robotics Invention System 2.0. Details and permissions per system are in the install sections below.
+
 ## Features
 
 - macOS-style interface: sidebar with Bricks and Tools, light and dark look, one program at a time
@@ -139,6 +148,8 @@ See the [`examples`](examples) folder: `forward_and_back.nqc`, `counter_to_displ
 BrickCode Studio es un editor nativo para programar ladrillos clásicos: **NQC** (RCX, Scout) y **NXC** (NXT).
 Escribe el programa, pulsa **F5** y se compila, se descarga y se ejecuta en el ladrillo.
 La interfaz está en inglés y español (selector en la barra superior). La instalación es la misma de arriba.
+
+**Cómo se conecta cada ladrillo:** el RCX y el Scout se programan con la **torre USB de LEGO** (infrarrojo; el ladrillo debe estar encendido, cerca de la torre y apuntando a ella). El NXT se programa con un **cable USB** directo al computador, sin torre.
 
 ## About me / Acerca de mí
 

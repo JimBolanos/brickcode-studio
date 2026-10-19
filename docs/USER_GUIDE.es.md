@@ -11,6 +11,8 @@ Soporta dos lenguajes, y la app cambia de uno a otro con el selector **NQC / NXC
 - **NQC** para el RCX y el Scout. `nqc` compila el programa y lo envía por la torre USB (infrarrojo).
 - **NXC** para el NXT. `nbc` lo compila y la propia app lo sube por USB, sin driver del sistema.
 
+**Qué necesitas para conectar.** El RCX y el Scout se programan con la **torre USB de LEGO** (infrarrojo); el NXT se programa con un **cable USB** directo al computador.
+
 La app es solo una interfaz: usa `nqc` y `nbc` por debajo, así que ambos deben estar instalados. Funciona en Linux (Arch/Omarchy, Fedora, Mint y otras) y en macOS con Apple Silicon. Está disponible en inglés y español.
 
 ![Modo NQC](screenshot-nqc-dark-es.png)
