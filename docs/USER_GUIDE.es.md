@@ -11,7 +11,7 @@ Soporta dos lenguajes, y la app cambia de uno a otro con el selector **NQC / NXC
 - **NQC** para el RCX y el Scout. `nqc` compila el programa y lo envía por la torre USB (infrarrojo).
 - **NXC** para el NXT. `nbc` lo compila y la propia app lo sube por USB, sin driver del sistema.
 
-**Qué necesitas para conectar.** El RCX y el Scout se programan con la **torre USB de LEGO** (infrarrojo); el NXT se programa con un **cable USB** directo al computador.
+**Qué necesitas para conectar.** El RCX y el Scout se programan con la **torre USB de LEGO** (infrarrojo; la torre serial aún no se ha probado); el NXT se programa con un **cable USB** directo al computador.
 
 La app es solo una interfaz: usa `nqc` y `nbc` por debajo, así que ambos deben estar instalados. Funciona en Linux (Arch/Omarchy, Fedora, Mint y otras) y en macOS con Apple Silicon. Está disponible en inglés y español.
 
@@ -86,7 +86,6 @@ Abre el panel de ajustes (⚙) para ver las opciones de NQC.
 | --- | --- |
 | RCX2 (firm0328.lgo) | RCX 2.0 con firmware 0328 o más nuevo. Es el valor por defecto de nqc. |
 | RCX (firm0309.lgo) | RCX 1.0 con el firmware original. |
-| CM | CyberMaster (sin probar). |
 | Scout | Scout. |
 | Spy | Spybotics (sin probar). |
 
@@ -94,7 +93,7 @@ Abre el panel de ajustes (⚙) para ver las opciones de NQC.
 
 **Cómo se manda un programa.** Con **Descargar** la app compila y envía el programa a la ranura elegida. Con **Ejecutar (F5)** hace lo mismo y lo ejecuta de inmediato. El ladrillo debe estar encendido, cerca de la torre y apuntando hacia ella. Si hay errores de compilación, aparecen en la consola y la app marca la línea en el editor.
 
-**Puerto de la torre.** Se configura en *Utilidades del ladrillo*, campo **Puerto de la torre**. En Linux y macOS el valor correcto para la torre USB es `usb`. El botón **Detectar** lo rellena por ti. Si tu torre es serial, escribe su puerto, por ejemplo `/dev/ttyUSB0`. Si lo dejas vacío, `nqc` usa su valor por defecto.
+**Puerto de la torre.** Se configura en *Utilidades del ladrillo*, campo **Puerto de la torre**. En Linux y macOS el valor correcto para la torre USB es `usb`. El botón **Detectar** lo rellena por ti. La torre serial aún no se ha probado; si la usas, escribe su puerto, por ejemplo `/dev/ttyUSB0`, y cuéntanos cómo te va. Si lo dejas vacío, `nqc` usa su valor por defecto.
 
 ### Control remoto
 

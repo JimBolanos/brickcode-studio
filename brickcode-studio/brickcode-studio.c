@@ -1,7 +1,7 @@
 /*
  * BrickCode Studio — one native GTK4 + C editor for two programming languages:
  *
- *   NQC  (RCX 1.0/2.0, Scout, CyberMaster, Spybotics)  ->  runs `nqc`
+ *   NQC  (RCX 1.0/2.0, Scout, Spybotics)  ->  runs `nqc`
  *   NXC  (NXT)                                          ->  runs `nbc`
  *
  * Works on Linux and macOS (Apple Silicon).
@@ -208,7 +208,6 @@ static const ModeInfo MODES[] = {
 static const struct { const char *name; const char *label; const char *desc; } NQC_TARGETS[] = {
     { "RCX2",  "RCX2 (firm0328.lgo)", "RCX 2.0 — firmware 0328 or newer (nqc default)" },
     { "RCX",   "RCX (firm0309.lgo)",  "RCX 1.0 — older firmware" },
-    { "CM",    "CM",                  "CyberMaster" },
     { "Scout", "Scout",               "Scout" },
     { "Spy",   "Spy",                 "Spybotics" },
 };
@@ -485,7 +484,7 @@ static void settings_save(AppState *st) {
     g_key_file_set_integer(kf, "ide", "lang", g_lang);
     g_key_file_set_integer(kf, "ide", "theme",
         gtk_drop_down_get_selected(GTK_DROP_DOWN(st->theme_dropdown)));
-    g_key_file_set_integer(kf, "nqc", "target",
+    g_key_file_set_integer(kf, "nqc", "target2",
         gtk_drop_down_get_selected(GTK_DROP_DOWN(st->target_dropdown)));
     g_key_file_set_integer(kf, "nqc", "slot",
         gtk_drop_down_get_selected(GTK_DROP_DOWN(st->slot_dropdown)));
@@ -2452,7 +2451,7 @@ static void about_cb(GtkButton *btn, gpointer user_data) {
 
     const char *rows[][2] = {
         {"Compilers",    "nqc (RCX / Scout)  ·  nbc (NXT)"},
-        {"NQC targets",  "RCX2 · RCX · CM · Scout · Spy"},
+        {"NQC targets",  "RCX2 · RCX · Scout · Spy"},
         {"NQC link",     "IR tower (USB / serial)"},
         {"NXC link",     "USB (libusb) · Bluetooth on Linux"},
         {"Highlighting", "Custom (GRegex)"},
@@ -3965,7 +3964,11 @@ static void activate(GtkApplication *app, gpointer user_data) {
         start_mode = (m == 1) ? MODE_NXC : MODE_NQC;
         gtk_drop_down_set_selected(GTK_DROP_DOWN(st->theme_dropdown),
                                     kf_int(kf, "ide", "theme", 0) == 1 ? 1 : 0);
-        int t = kf_int(kf, "nqc", "target", 0);
+        int t = kf_int(kf, "nqc", "target2", -1);
+        if (t < 0) {                /* old settings: CyberMaster was removed */
+            t = kf_int(kf, "nqc", "target", 0);
+            if (t == 2) t = 0; else if (t > 2) t--;
+        }
         if (t >= 0 && (guint)t < G_N_ELEMENTS(NQC_TARGETS))
             gtk_drop_down_set_selected(GTK_DROP_DOWN(st->target_dropdown), t);
         int slot = kf_int(kf, "nqc", "slot", 0);

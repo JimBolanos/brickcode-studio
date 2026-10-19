@@ -11,7 +11,7 @@ It supports two languages, switched with the **NQC / NXC** selector in the top b
 - **NQC** for the RCX and the Scout. `nqc` compiles the program and sends it through the USB tower (infrared).
 - **NXC** for the NXT. `nbc` compiles it and the app itself uploads it over USB, with no system driver.
 
-**What you need to connect.** The RCX and the Scout are programmed through the **LEGO USB Tower** (infrared); the NXT is programmed with a **USB cable** straight to the computer.
+**What you need to connect.** The RCX and the Scout are programmed through the **LEGO USB Tower** (infrared; the serial tower has not been tested yet); the NXT is programmed with a **USB cable** straight to the computer.
 
 The app is only an interface: it uses `nqc` and `nbc` underneath, so both must be installed. It works on Linux (Arch/Omarchy, Fedora, Mint and others) and on macOS with Apple Silicon. The interface is available in English and Spanish.
 
@@ -86,7 +86,6 @@ Open the settings panel (⚙) to see the NQC options.
 | --- | --- |
 | RCX2 (firm0328.lgo) | RCX 2.0 with firmware 0328 or newer. The nqc default. |
 | RCX (firm0309.lgo) | RCX 1.0 with the original firmware. |
-| CM | CyberMaster (not tested). |
 | Scout | Scout. |
 | Spy | Spybotics (not tested). |
 
@@ -94,7 +93,7 @@ Open the settings panel (⚙) to see the NQC options.
 
 **How a program is sent.** **Download** compiles and sends the program to the chosen slot. **Run (F5)** does the same and runs it at once. The brick must be on, close to the tower and pointing at it. Compile errors appear in the console and the app marks the line in the editor.
 
-**Tower port.** Set in *Brick utilities*, **Tower port** field. On Linux and macOS the right value for the USB tower is `usb`. The **Detect** button fills it for you. If your tower is serial, type its port, for example `/dev/ttyUSB0`. Empty means the `nqc` default.
+**Tower port.** Set in *Brick utilities*, **Tower port** field. On Linux and macOS the right value for the USB tower is `usb`. The **Detect** button fills it for you. The serial tower has not been tested yet; if you try it, type its port, for example `/dev/ttyUSB0`, and tell us how it goes. Empty means the `nqc` default.
 
 ### Remote
 
