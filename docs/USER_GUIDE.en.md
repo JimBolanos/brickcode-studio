@@ -58,7 +58,7 @@ The status bar shows the result of the last command (*Ready.*, errors or progres
 ### The sidebar
 
 - **Bricks**: a dot for the RCX tower and another for the NXT. It lights up when the device is detected.
-- **Tools**: in NQC mode *Remote*, *Datalog*, *Firmware…*, *Test brick* and *Test tools*; in NXC mode *NXT Explorer*, *Test NXT* and *Test tools*.
+- **Tools**: in NQC mode *Remote*, *VLL*, *Datalog*, *Firmware…*, *Test brick* and *Test tools*; in NXC mode *NXT Explorer*, *NXT Screen*, *Test NXT* and *Test tools*.
 - **Settings** (bottom): shows or hides the settings panel.
 
 ## 4. Files and editor
@@ -115,12 +115,14 @@ The RCX needs its firmware, must be on and pointing at the tower, and **Target**
 
 **VLL** (sidebar, NQC mode) opens a window to control a Micro Scout from a **Scout** brick. The app tells the Scout (through the USB tower) to send a VLL code with its light, so no program is needed.
 
+![VLL](screenshot-vll-en.png)
+
 | Button | What it does |
 | --- | --- |
 | ▲ / ▼ | Motor forward / backward (VLL direct commands 0 and 1). |
 | Beep 1 to 5 | Plays beep 1 to 5 (VLL codes 4 to 8). |
 
-Point the Scout's light at the Micro Scout. The Scout must be on, in range of the tower, with its firmware. This always uses the Scout target, whatever **Target** says. The console shows each command, prefixed `$ nqc -TScout -raw1`. Not tested on real hardware yet.
+Point the Scout's light at the Micro Scout. The Scout must be on, in range of the tower, with its firmware. This always uses the Scout target, whatever **Target** says. The console shows each command, prefixed `$ nqc -TScout -raw1`. Tested on macOS; still in testing on Linux.
 
 ### Firmware
 
@@ -154,7 +156,9 @@ When you switch to **NXC · NXT**, the settings panel shows the connection port 
 - **Refresh** updates the file list, with each size in bytes.
 - **Delete selected** deletes the chosen file. It does not ask for confirmation.
 
-**NXT Screen** (sidebar) shows a drawing of the NXT with its display, refreshed twice a second. It connects when it opens; **Connect** tries again. Click the drawn buttons (◀ orange Enter ▶ and the gray Exit) like the NXT's own, to move through its menus from the computer; hold one for a long press. The arrow keys, Return and Esc do the same. The NXT Explorer and the NXT Screen cannot use the USB cable at the same time, so close one before opening the other. Not tested on a real NXT yet.
+**NXT Screen** (sidebar) shows a drawing of the NXT with its display, refreshed twice a second. It connects when it opens; **Connect** tries again. Click the drawn buttons (◀ orange Enter ▶ and the gray Exit) like the NXT's own, to move through its menus from the computer; hold one for a long press. The arrow keys, Return and Esc do the same. The NXT Explorer and the NXT Screen cannot use the USB cable at the same time, so close one before opening the other. Tested on macOS; still in testing on Linux.
+
+![NXT Screen](screenshot-nxt-screen-en.png)
 
 If the NXT is in firmware mode (SAMBA), the top bar says so, but the app does not upload programs in that state.
 
@@ -182,6 +186,7 @@ If the NXT is in firmware mode (SAMBA), the top bar says so, but the app does no
 | Button | What it does |
 | --- | --- |
 | NXT Explorer | Window to see and delete the files on the NXT (section 6). |
+| NXT Screen | The NXT display and buttons on the computer (section 6). |
 | Test tools | Same as in NQC: checks `nqc` and `nbc`. |
 | Test NXT | Opens the NXT over USB and asks for battery and firmware version. If it answers, the cable and permissions are fine. |
 

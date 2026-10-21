@@ -17,6 +17,10 @@ The interface is available in **English and Spanish** (selector in the top bar).
 <img src="docs/screenshot-firmware-en.png" width="48%" alt="Firmware sheet">
 <img src="docs/screenshot-remote-en.png" width="20%" alt="Remote">
 </p>
+<p>
+<img src="docs/screenshot-vll-en.png" width="30%" alt="VLL">
+<img src="docs/screenshot-nxt-screen-en.png" width="30%" alt="NXT Screen">
+</p>
 
 Full guide: [English](docs/USER_GUIDE.en.md) · [Español](docs/USER_GUIDE.es.md)
 
@@ -37,9 +41,9 @@ BrickCode Studio uses the **USB tower**. The older **serial tower** has not been
 - Device chip: shows whether an NXT or an RCX tower is connected
 - RCX tools: tower port detection, firmware sheet with a real progress bar, datalog, IR range, auto-shutoff
 - NXT Explorer: files, battery and firmware over USB
-- NXT Screen: the NXT display shown live on the computer over USB, drawn as the NXT brick, with clickable buttons (◀ Enter ▶ Exit) and keyboard keys to move through the NXT menus. Screen view confirmed on a real NXT; the buttons are not tested on hardware yet.
+- NXT Screen: the NXT display shown live on the computer over USB, drawn as the NXT brick, with clickable buttons (◀ Enter ▶ Exit) and keyboard keys to move through the NXT menus. Tested on macOS (Mac mini M4 with an NXT); still in testing on Linux.
 - Remote (RCX): the buttons of the LEGO IR remote (messages, motors A/B/C, programs P1-P5, stop, sound), sent with `nqc`. The motor buttons run the motor while held, like the real remote. The installers patch nqc at build time so it does not wait for a reply the RCX never sends to remote commands (needed for the motor to keep running). Tested on a Mac mini M4 with an RCX 2.0.
-- VLL (Scout): makes a Scout send VLL codes (motor forward / backward, beeps) to a Micro Scout, through the USB tower. Not tested on real hardware yet.
+- VLL (Scout): makes a Scout send VLL codes (motor forward / backward, beeps) to a Micro Scout, through the USB tower. Tested on macOS (Mac mini M4); still in testing on Linux.
 
 ## Install
 
@@ -52,6 +56,8 @@ BrickCode Studio uses the **USB tower**. The older **serial tower** has not been
 | Arch / Omarchy | Confirmed with RCX and NXT. |
 
 The Spybotics target is in the menu but has not been tested on a real brick yet (the Scout was tested by COPERNICON). Feedback is welcome.
+
+New in 2.2.0: **VLL** and **NXT Screen**. Both are confirmed on macOS; on Linux they are still in testing.
 
 ### macOS (Apple Silicon)
 

@@ -58,7 +58,7 @@ La franja de estado muestra el resultado del último comando (*Listo.*, errores 
 ### La barra lateral
 
 - **Ladrillos**: un punto para la torre RCX y otro para el NXT. Se enciende cuando el dispositivo se detecta.
-- **Herramientas**: en modo NQC *Control remoto*, *Registro de datos*, *Firmware…*, *Probar ladrillo* y *Probar herramientas*; en modo NXC *Explorador NXT*, *Probar NXT* y *Probar herramientas*.
+- **Herramientas**: en modo NQC *Control remoto*, *VLL*, *Registro de datos*, *Firmware…*, *Probar ladrillo* y *Probar herramientas*; en modo NXC *Explorador NXT*, *Pantalla del NXT*, *Probar NXT* y *Probar herramientas*.
 - **Ajustes** (abajo): muestra u oculta el panel de ajustes.
 
 ## 4. Archivos y editor
@@ -115,12 +115,14 @@ El RCX necesita su firmware, debe estar encendido y apuntando a la torre, y el *
 
 **VLL** (barra lateral, modo NQC) abre una ventana para controlar un Micro Scout desde un ladrillo **Scout**. La app le pide al Scout (por la torre USB) que envíe un código VLL con su luz, así que no hace falta ningún programa.
 
+![VLL](screenshot-vll-es.png)
+
 | Botón | Qué hace |
 | --- | --- |
 | ▲ / ▼ | Motor hacia adelante / hacia atrás (comandos directos VLL 0 y 1). |
 | Pitido 1 a 5 | Reproduce el pitido 1 a 5 (códigos VLL 4 a 8). |
 
-Apunta la luz del Scout hacia el Micro Scout. El Scout debe estar encendido, al alcance de la torre y con su firmware. Siempre usa el modelo Scout, sin importar lo que diga **Modelo**. La consola muestra cada comando, con el prefijo `$ nqc -TScout -raw1`. Aún no se ha probado con hardware real.
+Apunta la luz del Scout hacia el Micro Scout. El Scout debe estar encendido, al alcance de la torre y con su firmware. Siempre usa el modelo Scout, sin importar lo que diga **Modelo**. La consola muestra cada comando, con el prefijo `$ nqc -TScout -raw1`. Probado en macOS; en Linux sigue en pruebas.
 
 ### Firmware
 
@@ -154,7 +156,9 @@ Al cambiar a **NXC · NXT**, el panel de ajustes muestra el puerto de conexión 
 - **Actualizar** refresca la lista de archivos, con el tamaño de cada uno en bytes.
 - **Eliminar selección** borra el archivo elegido. No pide confirmación.
 
-**Pantalla del NXT** (barra lateral) muestra un dibujo del NXT con su pantalla, refrescada dos veces por segundo. Se conecta al abrirse; **Conectar** vuelve a intentarlo. Haz clic en los botones dibujados (◀, el Enter naranja, ▶ y el Exit gris) como en los del propio NXT, para moverte por sus menús desde el computador; mantén uno pulsado para una pulsación larga. Las flechas, Return y Esc hacen lo mismo. El Explorador NXT y la Pantalla del NXT no pueden usar el cable USB a la vez, así que cierra uno antes de abrir el otro. Aún no se ha probado con un NXT real.
+**Pantalla del NXT** (barra lateral) muestra un dibujo del NXT con su pantalla, refrescada dos veces por segundo. Se conecta al abrirse; **Conectar** vuelve a intentarlo. Haz clic en los botones dibujados (◀, el Enter naranja, ▶ y el Exit gris) como en los del propio NXT, para moverte por sus menús desde el computador; mantén uno pulsado para una pulsación larga. Las flechas, Return y Esc hacen lo mismo. El Explorador NXT y la Pantalla del NXT no pueden usar el cable USB a la vez, así que cierra uno antes de abrir el otro. Probado en macOS; en Linux sigue en pruebas.
+
+![Pantalla del NXT](screenshot-nxt-screen-es.png)
 
 Si el NXT está en modo firmware (SAMBA), la barra superior lo indica, pero la app no sube programas en ese estado.
 
@@ -182,6 +186,7 @@ Si el NXT está en modo firmware (SAMBA), la barra superior lo indica, pero la a
 | Botón | Qué hace |
 | --- | --- |
 | Explorador NXT | Ventana para ver y borrar los archivos del NXT (sección 6). |
+| Pantalla del NXT | La pantalla y los botones del NXT en el computador (sección 6). |
 | Probar herramientas | Igual que en NQC: revisa `nqc` y `nbc`. |
 | Probar NXT | Abre el NXT por USB y le pide batería y versión de firmware. Si responde, el cable y los permisos están bien. |
 

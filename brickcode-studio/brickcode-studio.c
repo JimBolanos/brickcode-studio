@@ -40,7 +40,7 @@
 #include <stdlib.h>
 
 #define APP_NAME     "BrickCode Studio"
-#define APP_VERSION  "2.1.1"
+#define APP_VERSION  "2.2.0"
 
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
