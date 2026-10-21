@@ -111,6 +111,17 @@ Abre el panel de ajustes (⚙) para ver las opciones de NQC.
 
 El RCX necesita su firmware, debe estar encendido y apuntando a la torre, y el **Modelo** y el **Puerto de la torre** deben ser los correctos (usa **Probar ladrillo** para comprobarlo). En la consola aparece cada comando enviado, con el prefijo `$ nqc -raw1`.
 
+### VLL (Micro Scout)
+
+**VLL** (barra lateral, modo NQC) abre una ventana para controlar un Micro Scout desde un ladrillo **Scout**. La app le pide al Scout (por la torre USB) que envíe un código VLL con su luz, así que no hace falta ningún programa.
+
+| Botón | Qué hace |
+| --- | --- |
+| ▲ / ▼ | Motor hacia adelante / hacia atrás (comandos directos VLL 0 y 1). |
+| Pitido 1 a 5 | Reproduce el pitido 1 a 5 (códigos VLL 4 a 8). |
+
+Apunta la luz del Scout hacia el Micro Scout. El Scout debe estar encendido, al alcance de la torre y con su firmware. Siempre usa el modelo Scout, sin importar lo que diga **Modelo**. La consola muestra cada comando, con el prefijo `$ nqc -TScout -raw1`. Aún no se ha probado con hardware real.
+
 ### Firmware
 
 El RCX necesita su firmware una sola vez, y lo pierde si se le quitan las pilas un rato. **Firmware…** abre una hoja para instalarlo.
