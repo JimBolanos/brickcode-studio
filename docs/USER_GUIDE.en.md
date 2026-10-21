@@ -143,7 +143,7 @@ When you switch to **NXC · NXT**, the settings panel shows the connection port 
 - **Refresh** updates the file list, with each size in bytes.
 - **Delete selected** deletes the chosen file. It does not ask for confirmation.
 
-**NXT Screen** (sidebar) shows the NXT display on the computer, refreshed twice a second. It connects when it opens; **Connect** tries again. The NXT Explorer and the NXT Screen cannot use the USB cable at the same time, so close one before opening the other. Not tested on a real NXT yet.
+**NXT Screen** (sidebar) shows the NXT display on the computer, refreshed twice a second. It connects when it opens; **Connect** tries again. The buttons under the screen (◀ Enter ▶ Exit) work like the NXT's own buttons, so you can move through its menus from the computer; hold one for a long press. The arrow keys, Return and Esc do the same. The NXT Explorer and the NXT Screen cannot use the USB cable at the same time, so close one before opening the other. Not tested on a real NXT yet.
 
 If the NXT is in firmware mode (SAMBA), the top bar says so, but the app does not upload programs in that state.
 

@@ -143,7 +143,7 @@ Al cambiar a **NXC · NXT**, el panel de ajustes muestra el puerto de conexión 
 - **Actualizar** refresca la lista de archivos, con el tamaño de cada uno en bytes.
 - **Eliminar selección** borra el archivo elegido. No pide confirmación.
 
-**Pantalla del NXT** (barra lateral) muestra la pantalla del NXT en el computador, refrescada dos veces por segundo. Se conecta al abrirse; **Conectar** vuelve a intentarlo. El Explorador NXT y la Pantalla del NXT no pueden usar el cable USB a la vez, así que cierra uno antes de abrir el otro. Aún no se ha probado con un NXT real.
+**Pantalla del NXT** (barra lateral) muestra la pantalla del NXT en el computador, refrescada dos veces por segundo. Se conecta al abrirse; **Conectar** vuelve a intentarlo. Los botones bajo la pantalla (◀ Enter ▶ Exit) funcionan como los botones del propio NXT, así que puedes moverte por sus menús desde el computador; mantén uno pulsado para una pulsación larga. Las flechas, Return y Esc hacen lo mismo. El Explorador NXT y la Pantalla del NXT no pueden usar el cable USB a la vez, así que cierra uno antes de abrir el otro. Aún no se ha probado con un NXT real.
 
 Si el NXT está en modo firmware (SAMBA), la barra superior lo indica, pero la app no sube programas en ese estado.
 

@@ -2762,6 +2762,7 @@ typedef struct {
     libusb_context *ctx;
     libusb_device_handle *handle;
     guint timer;
+    guint8 held;                        /* NXT button being held (1-4), 0 = none */
     guint8 buf[SCREEN_BYTES];
 } ScreenState;
 
@@ -2830,6 +2831,77 @@ static void screen_connect_cb(GtkButton *btn, gpointer data) {
     s->timer = g_timeout_add(500, screen_tick, s);
 }
 
+/* On-screen NXT buttons: WriteIOMap (0x95) of one byte to the UI module, offset 28.
+ * Same values BricxCC sends: 1 left, 2 enter, 3 right, 4 exit when pressed, +8 when released. */
+#define SYS_WRITE_IOMAP 0x95
+#define NXT_MOD_UI      0x000C0001
+#define UI_OFF_BUTTON   28
+
+static void screen_send_button(ScreenState *s, guint8 value) {
+    guint8 req[11] = { CMD_SYSTEM_REPLY, SYS_WRITE_IOMAP,
+                       NXT_MOD_UI & 0xFF, (NXT_MOD_UI >> 8) & 0xFF,
+                       (NXT_MOD_UI >> 16) & 0xFF, (NXT_MOD_UI >> 24) & 0xFF,
+                       UI_OFF_BUTTON, 0, 1, 0, value };
+    guint8 rep[64];
+    if (!s->handle || !nxt_transact(s->handle, req, sizeof(req), rep, sizeof(rep)) || rep[2] != 0)
+        gtk_label_set_text(GTK_LABEL(s->status), "The NXT did not accept the button.");
+    else if (screen_read(s))
+        gtk_widget_queue_draw(s->area);                 /* show the result right away */
+}
+
+static void screen_press(ScreenState *s, guint8 btn) {
+    if (s->held) return;                                /* key repeat or a second button */
+    s->held = btn;
+    screen_send_button(s, btn);
+}
+
+static void screen_release(ScreenState *s) {
+    if (!s->held) return;
+    guint8 btn = s->held;
+    s->held = 0;
+    screen_send_button(s, btn + 8);
+}
+
+static void screen_btn_pressed(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {
+    gtk_gesture_set_state(GTK_GESTURE(g), GTK_EVENT_SEQUENCE_CLAIMED);   /* like the Remote */
+    GtkWidget *w = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(g));
+    screen_press(data, GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(w), "btn")));
+}
+
+static void screen_btn_released(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {
+    screen_release(data);
+}
+
+static void screen_noop(GtkButton *b, gpointer data) { }
+
+static GtkWidget *screen_button(ScreenState *s, const char *label, const char *css, guint btn) {
+    GtkWidget *b = chip_button(label, css, G_CALLBACK(screen_noop), s);
+    g_object_set_data(G_OBJECT(b), "btn", GUINT_TO_POINTER(btn));
+    GtkGesture *g = gtk_gesture_click_new();
+    gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(g), GTK_PHASE_CAPTURE);
+    g_signal_connect(g, "pressed", G_CALLBACK(screen_btn_pressed), s);
+    g_signal_connect(g, "released", G_CALLBACK(screen_btn_released), s);
+    g_signal_connect(g, "cancel", G_CALLBACK(screen_btn_released), s);
+    gtk_widget_add_controller(b, GTK_EVENT_CONTROLLER(g));
+    return b;
+}
+
+/* Keyboard: arrows, Return and Esc act like the NXT buttons. */
+static gboolean screen_key_pressed(GtkEventControllerKey *c, guint key, guint code,
+                                   GdkModifierType mod, gpointer data) {
+    guint btn = key == GDK_KEY_Left ? 1 : key == GDK_KEY_Right ? 3 :
+                key == GDK_KEY_Escape ? 4 :
+                (key == GDK_KEY_Return || key == GDK_KEY_KP_Enter) ? 2 : 0;
+    if (!btn) return FALSE;
+    screen_press(data, btn);
+    return TRUE;
+}
+
+static void screen_key_released(GtkEventControllerKey *c, guint key, guint code,
+                                GdkModifierType mod, gpointer data) {
+    screen_release(data);
+}
+
 static void screen_cleanup(GtkWidget *window, gpointer data) {
     ScreenState *s = data;
     screen_stop(s);
@@ -2862,6 +2934,20 @@ static void open_screen_cb(GtkButton *btn, gpointer user_data) {
     gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(s->area), 64 * SCREEN_ZOOM);
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(s->area), screen_draw, s, NULL);
     gtk_box_append(GTK_BOX(box), s->area);
+
+    GtkWidget *keys = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_set_halign(keys, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(keys), screen_button(s, "◀", "qa-blue", 1));
+    gtk_box_append(GTK_BOX(keys), screen_button(s, "Enter", "qa-orange", 2));
+    gtk_box_append(GTK_BOX(keys), screen_button(s, "▶", "qa-blue", 3));
+    gtk_box_append(GTK_BOX(keys), screen_button(s, "Exit", "qa-pink", 4));
+    gtk_box_append(GTK_BOX(box), keys);
+
+    GtkEventController *kc = gtk_event_controller_key_new();
+    gtk_event_controller_set_propagation_phase(kc, GTK_PHASE_CAPTURE);
+    g_signal_connect(kc, "key-pressed", G_CALLBACK(screen_key_pressed), s);
+    g_signal_connect(kc, "key-released", G_CALLBACK(screen_key_released), s);
+    gtk_widget_add_controller(s->window, kc);
 
     GtkWidget *connect_btn = gtk_button_new_with_label("Connect");
     gtk_widget_add_css_class(connect_btn, "qa-btn");
