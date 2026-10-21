@@ -21,6 +21,26 @@ echo "==> 2/5 nqc (RCX / Scout)"
   # nqc waits ~0.5 s for a reply the RCX never sends to remote/message commands.
   # Re-enable the "no reply expected" case (commented out upstream) so the Remote is fast.
   perl -0pi -e 's|/\*\n(\s*case kRCX_Message:)|$1|; s|(return 0;\s*// unconfirmed\n)\*/\n|$1|' rcxlib/RCX_Link.cpp
+  # Enable the Linux USB tower driver (commented out upstream). The old LegoUSB header is
+  # not available any more, so a tiny stand-in is used (the kernel dropped that ioctl).
+  sed -i 's/^\t#USBOBJ = RCX_USBTowerPipe_linux/\tUSBOBJ = RCX_USBTowerPipe_linux/' Makefile
+  # The tower file name is hard-coded to the old /dev/usb/lego0; current kernels use legousbtower0.
+  sed -i 's|/dev/usb/lego0|/dev/usb/legousbtower0|' rcxlib/RCX_USBTowerPipe_linux.cpp
+  # Its Read() sleeps half of the timeout before every read (0.5 s per message); the macOS pipe does not.
+  sed -i 's|^\tusleep(timeout_ms \* 1000 / 2);|\t/* no sleep */|' rcxlib/RCX_USBTowerPipe_linux.cpp
+  # The kernel driver ignores the old timeout ioctl and blocks 200 ms on every empty read.
+  # Wait with poll() and the requested timeout instead (like the macOS pipe does).
+  sed -i 's|^#include <sys/ioctl.h>|#include <sys/ioctl.h>\n#include <poll.h>|' rcxlib/RCX_USBTowerPipe_linux.cpp
+  perl -0pi -e 's|\n\tSetTimeout\(timeout_ms\);\n|\n\t{ struct pollfd p; p.fd = fd; p.events = POLLIN; p.revents = 0;\n\t  if (poll(&p, 1, (int)timeout_ms) <= 0) return 0; }\n|' rcxlib/RCX_USBTowerPipe_linux.cpp
+  mkdir -p "$WORK/shim/LegoUSB"
+  cat > "$WORK/shim/LegoUSB/legousbtower.h" <<'EOF'
+#ifndef LEGOUSBTOWER_SHIM_H
+#define LEGOUSBTOWER_SHIM_H
+#include <sys/ioctl.h>
+#define LEGO_TOWER_SET_READ_TIMEOUT _IOW('u', 0xFE, unsigned int)
+#endif
+EOF
+  export CPLUS_INCLUDE_PATH="$WORK/shim"
   make clean >/dev/null 2>&1 || true
   make bin; make bin/mkdata; make nqh; make nub        # generate files in order
   make compiler/parse.cpp; make compiler/lexer.cpp

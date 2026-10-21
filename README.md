@@ -107,10 +107,11 @@ Same steps as Linux Mint (Mint is based on Ubuntu). Not tested yet; please repor
 ### Linux Arch / Omarchy
 
 ```
-cd nbc-git && makepkg -si                 # NXC compiler + udev rules for the NXT
-cd ../brickcode-studio && makepkg -si
+bash linux/install-arch.sh
 ```
-For NQC also install `nqc` (AUR).
+Builds `nqc` (with the Remote patch and the Linux USB tower driver enabled), `nbc` and the app into `~/.local/brickcode`, copies the RCX firmware and offers the udev rule for the NXT. Only the `pacman` packages and the udev rule use `sudo`. Not tested yet on a clean Omarchy install.
+
+Alternative with system packages: `cd nbc-git && makepkg -si`, then `cd ../brickcode-studio && makepkg -si`. The `nqc` from the AUR may not support `-getversion` (the *Test brick* button), so the installer above is recommended.
 
 ### Linux, other distros
 

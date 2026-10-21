@@ -30,6 +30,7 @@
 #include <gtk/gtk.h>
 #include <glib/gstdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <libusb.h>
 #include <gio/gio.h>
 #include <string.h>
@@ -159,6 +160,9 @@ static const char *NXC_BUILTINS[] = {
 };
 
 #include "nqc_tables.inc"
+
+/* Linux: the remote keeps the tower open (see the Remote section); close it before any nqc run. */
+static void remote_tower_close(void);
 
 static const char *NQC_TEMPLATE =
     "// A first program. Press F5, or the Compile & Run button.\n"
@@ -1124,6 +1128,7 @@ static gboolean run_tool(AppState *st, const char *const *argv,
     g_free(line);
     g_string_free(pretty, TRUE);
 
+    remote_tower_close();
     GSubprocessLauncher *launcher = g_subprocess_launcher_new(
         G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDERR_PIPE);
     if (rcx_port && *rcx_port)
@@ -2756,6 +2761,61 @@ static AppState *remote_st = NULL;
 
 static void remote_next(void);
 
+#ifdef __linux__
+/* On Linux the kernel driver waits 0.5 s every time the tower is closed, and nqc closes it
+ * after each message. So the Remote opens /dev/usb/legousbtower0 once and writes the IR
+ * frames itself (about 50 ms each). If anything goes wrong it falls back to nqc. */
+static int tower_fd = -1;
+static gboolean tower_failed = FALSE;
+
+static void remote_tower_close(void) {
+    if (tower_fd >= 0) { close(tower_fd); tower_fd = -1; }
+}
+
+static gboolean tower_open_dev(AppState *st) {
+    if (tower_fd >= 0) return TRUE;
+    if (tower_failed) return FALSE;
+    const char *port = gtk_editable_get_text(GTK_EDITABLE(st->tower_entry));
+    const char *dev = "/dev/usb/legousbtower0";
+    if (port && g_str_has_prefix(port, "usb:") && port[4]) dev = port + 4;
+    else if (port && *port && strcmp(port, "usb") != 0) return FALSE;   /* serial tower: use nqc */
+    tower_fd = open(dev, O_RDWR | O_CLOEXEC);
+    return tower_fd >= 0;
+}
+
+static void tower_write_thread(GTask *task, gpointer src, gpointer data, GCancellable *c) {
+    gsize n;
+    const guchar *p = g_bytes_get_data((GBytes *)data, &n);
+    int fd = tower_fd;
+    g_task_return_boolean(task, fd >= 0 && write(fd, p, n) == (ssize_t)n);
+}
+
+static void remote_done_tower(GObject *src, GAsyncResult *res, gpointer data) {
+    if (!g_task_propagate_boolean(G_TASK(res), NULL)) {
+        remote_tower_close();
+        tower_failed = TRUE;          /* use nqc from now on */
+    }
+    remote_busy = FALSE;
+    remote_next();
+}
+
+/* IR frame: 55 ff 00, then each byte followed by its complement, then checksum. */
+static gboolean remote_send_tower(AppState *st, guchar op, guchar b1, guchar b2) {
+    if (!tower_open_dev(st)) return FALSE;
+    guchar sum = (guchar)(op + b1 + b2);
+    guchar f[11] = { 0x55, 0xff, 0x00, op, (guchar)~op, b1, (guchar)~b1,
+                     b2, (guchar)~b2, sum, (guchar)~sum };
+    GTask *t = g_task_new(NULL, NULL, remote_done_tower, NULL);
+    g_task_set_task_data(t, g_bytes_new(f, sizeof(f)), (GDestroyNotify)g_bytes_unref);
+    remote_busy = TRUE;
+    g_task_run_in_thread(t, tower_write_thread);
+    g_object_unref(t);
+    return TRUE;
+}
+#else
+static void remote_tower_close(void) {}
+#endif
+
 static void remote_done(GObject *src, GAsyncResult *res, gpointer data) {
     g_subprocess_wait_finish(G_SUBPROCESS(src), res, NULL);
     remote_busy = FALSE;
@@ -2771,6 +2831,15 @@ static void remote_send(const char *hex) {
     /* bytes: opcode, low byte, high byte of the 16-bit mask */
     snprintf(msg, sizeof(msg), "%s%.2s%.2s", remote_toggle ? "DA" : "D2", hex + 2, hex);
     remote_toggle = !remote_toggle;
+#ifdef __linux__
+    {
+        unsigned v = (unsigned)strtoul(hex, NULL, 16);       /* 16-bit key mask */
+        if (remote_send_tower(st, msg[1] == 'A' ? 0xDA : 0xD2, v & 0xFF, (v >> 8) & 0xFF)) {
+            g_free(target);
+            return;
+        }
+    }
+#endif
     const char *argv[] = { NQC_CMD, target, "-raw1", msg, NULL };
     GSubprocessLauncher *l = g_subprocess_launcher_new(
         G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE);
@@ -2853,6 +2922,8 @@ static GtkWidget *remote_hold_button(AppState *st, const char *label, const char
     return b;
 }
 
+static void remote_win_destroy_cb(GtkWidget *w, gpointer data) { remote_tower_close(); }
+
 static void open_remote_cb(GtkButton *btn, gpointer user_data) {
     AppState *st = user_data;
     GtkWidget *win = gtk_window_new();
@@ -2918,6 +2989,7 @@ static void open_remote_cb(GtkButton *btn, gpointer user_data) {
     gtk_box_append(GTK_BOX(last), remote_button(st, "Sound", "qa-orange", 0x0080));
     gtk_box_append(GTK_BOX(box), last);
 
+    g_signal_connect(win, "destroy", G_CALLBACK(remote_win_destroy_cb), NULL);
     gtk_window_present(GTK_WINDOW(win));
 }
 

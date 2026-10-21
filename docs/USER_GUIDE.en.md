@@ -23,7 +23,7 @@ All the code and releases are at [github.com/JimBolanos/brickcode-studio](https:
 
 | System | How to install |
 | --- | --- |
-| Arch / Omarchy | `cd nbc-git && makepkg -si`, then `cd ../brickcode-studio && makepkg -si`. For NQC also install `nqc` from the AUR. |
+| Arch / Omarchy | `bash linux/install-arch.sh` builds nqc, nbc and the app in `~/.local/brickcode`. |
 | Fedora | `bash linux/install-fedora.sh` installs the dependencies and builds nqc, nbc and the app in `~/.local/brickcode`. |
 | Debian / Ubuntu / Mint | `bash linux/install-debian.sh` (same idea as Fedora). |
 | Other Linux | Install the GTK4 and libusb-1.0 development packages, then `make && sudo make install`. |
