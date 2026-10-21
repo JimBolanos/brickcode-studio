@@ -39,6 +39,7 @@ BrickCode Studio uses the **USB tower**. The older **serial tower** has not been
 - NXT Explorer: files, battery and firmware over USB
 - NXT Screen: the NXT display shown live on the computer over USB, drawn as the NXT brick, with clickable buttons (◀ Enter ▶ Exit) and keyboard keys to move through the NXT menus. Screen view confirmed on a real NXT; the buttons are not tested on hardware yet.
 - Remote (RCX): the buttons of the LEGO IR remote (messages, motors A/B/C, programs P1-P5, stop, sound), sent with `nqc`. The motor buttons run the motor while held, like the real remote. The installers patch nqc at build time so it does not wait for a reply the RCX never sends to remote commands (needed for the motor to keep running). Tested on a Mac mini M4 with an RCX 2.0.
+- VLL (Scout): makes a Scout send VLL codes (motor forward / backward, beeps) to a Micro Scout, through the USB tower. Not tested on real hardware yet.
 
 ## Install
 
