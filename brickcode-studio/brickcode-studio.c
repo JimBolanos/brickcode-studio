@@ -40,7 +40,7 @@
 #include <stdlib.h>
 
 #define APP_NAME     "BrickCode Studio"
-#define APP_VERSION  "2.1.1"
+#define APP_VERSION  "2.2.0"
 
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
@@ -3287,6 +3287,91 @@ static void open_remote_cb(GtkButton *btn, gpointer user_data) {
 }
 
 /* ---------------------------------------------------------------------
+ * VLL: the Scout sends a VLL code to a Micro Scout.
+ * Message = opcode 0xE2 (0xEA on every second send, the RCX toggle bit),
+ * source 2 (constant), then the code. Codes are BricxCC's MSVLL_* values.
+ * --------------------------------------------------------------------- */
+static gboolean vll_toggle = FALSE;
+static gboolean vll_busy = FALSE;
+
+static void vll_done(GObject *src, GAsyncResult *res, gpointer data) {
+    g_subprocess_wait_finish(G_SUBPROCESS(src), res, NULL);
+    vll_busy = FALSE;
+}
+
+static void vll_btn_cb(GtkButton *btn, gpointer user_data) {
+    AppState *st = user_data;
+    if (vll_busy) return;
+    guint code = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(btn), "code"));
+    char msg[16];
+    snprintf(msg, sizeof(msg), "%s02%02X", vll_toggle ? "EA" : "E2", code);
+    vll_toggle = !vll_toggle;
+
+    remote_tower_close();
+    const char *argv[] = { NQC_CMD, "-TScout", "-raw1", msg, NULL };
+    GSubprocessLauncher *l = g_subprocess_launcher_new(
+        G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE);
+    const char *port = gtk_editable_get_text(GTK_EDITABLE(st->tower_entry));
+    if (port && *port) g_subprocess_launcher_setenv(l, "RCX_PORT", port, TRUE);
+    GSubprocess *p = g_subprocess_launcher_spawnv(l, argv, NULL);
+    g_object_unref(l);
+    if (!p) return;
+    vll_busy = TRUE;
+    g_subprocess_wait_async(p, NULL, vll_done, NULL);
+    g_object_unref(p);
+
+    char *line = g_strdup_printf("$ nqc -TScout -raw1 %s (VLL %u)", msg, code);
+    log_output(st, line, "cmd");
+    g_free(line);
+}
+
+static GtkWidget *vll_button(AppState *st, const char *label, const char *css, guint code) {
+    GtkWidget *b = chip_button(label, css, G_CALLBACK(vll_btn_cb), st);
+    g_object_set_data(G_OBJECT(b), "code", GUINT_TO_POINTER(code));
+    return b;
+}
+
+static void open_vll_cb(GtkButton *btn, gpointer user_data) {
+    AppState *st = user_data;
+    GtkWidget *win = gtk_window_new();
+    gtk_window_set_title(GTK_WINDOW(win), T("VLL (Micro Scout)"));
+    gtk_window_set_transient_for(GTK_WINDOW(win), GTK_WINDOW(st->window));
+    gtk_window_set_resizable(GTK_WINDOW(win), FALSE);
+
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_widget_add_css_class(box, "drawer");
+    gtk_widget_set_margin_start(box, 14);
+    gtk_widget_set_margin_end(box, 14);
+    gtk_widget_set_margin_top(box, 12);
+    gtk_widget_set_margin_bottom(box, 12);
+    gtk_window_set_child(GTK_WINDOW(win), box);
+
+    GtkWidget *hint = gtk_label_new("Point the Scout's light at the Micro Scout.");
+    gtk_widget_add_css_class(hint, "console-label");
+    gtk_box_append(GTK_BOX(box), hint);
+
+    /* Direct commands: motor forward / backward */
+    GtkWidget *move = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_set_halign(move, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(move), vll_button(st, "▲", "qa-green", 0));
+    gtk_box_append(GTK_BOX(move), vll_button(st, "▼", "qa-green", 1));
+    gtk_box_append(GTK_BOX(box), move);
+
+    /* Direct commands: beeps 1-5 are codes 4-8 */
+    GtkWidget *l1 = gtk_label_new("Beep");
+    gtk_widget_add_css_class(l1, "settings-label");
+    gtk_box_append(GTK_BOX(box), l1);
+    GtkWidget *beeps = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_widget_set_halign(beeps, GTK_ALIGN_CENTER);
+    const char *bn[5] = { "1", "2", "3", "4", "5" };
+    for (int i = 0; i < 5; i++)
+        gtk_box_append(GTK_BOX(beeps), vll_button(st, bn[i], "qa-orange", 4 + i));
+    gtk_box_append(GTK_BOX(box), beeps);
+
+    gtk_window_present(GTK_WINDOW(win));
+}
+
+/* ---------------------------------------------------------------------
  * Main window
  * --------------------------------------------------------------------- */
 
@@ -4188,6 +4273,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_box_append(GTK_BOX(row5),
         chip_button("Remote", "qa-blue", G_CALLBACK(open_remote_cb), st));
     gtk_box_append(GTK_BOX(row5),
+        chip_button("VLL", "qa-purple", G_CALLBACK(open_vll_cb), st));
+    gtk_box_append(GTK_BOX(row5),
         chip_button("Firmware…", "qa-orange", G_CALLBACK(open_firmware_sheet_cb), st));
     gtk_box_append(GTK_BOX(st->utils_nqc), row5);
     gtk_box_append(GTK_BOX(utils_content), st->utils_nqc);
@@ -4258,6 +4345,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
     st->side_nqc_tools = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
     gtk_box_append(GTK_BOX(st->side_nqc_tools),
         side_button("Remote", "sq-orange", G_CALLBACK(open_remote_cb), st));
+    gtk_box_append(GTK_BOX(st->side_nqc_tools),
+        side_button("VLL", "sq-blue", G_CALLBACK(open_vll_cb), st));
     GtkWidget *dl_btn = side_button("Datalog", "sq-pink", G_CALLBACK(nqc_util_cb), st);
     g_object_set_data(G_OBJECT(dl_btn), "nqc-flag", (gpointer)"-datalog");
     gtk_box_append(GTK_BOX(st->side_nqc_tools), dl_btn);
