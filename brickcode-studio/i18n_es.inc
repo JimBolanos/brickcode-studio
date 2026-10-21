@@ -34,7 +34,6 @@
 { "NXT not found or busy. Close the NXT Explorer and check the USB cable.", "No se encontró el NXT o está ocupado. Cierra el Explorador NXT y revisa el cable USB." },
 { "Lost connection to the NXT.", "Se perdió la conexión con el NXT." },
 { "The NXT did not accept the button.", "El NXT no aceptó el botón." },
-{ "Exit", "Salir" },
 { "Run", "Ejecutar" },
 { "Clear brick", "Borrar ladrillo" },
 { "Datalog", "Registro de datos" },

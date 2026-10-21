@@ -2755,7 +2755,7 @@ static GtkWidget *nqc_flag_button(AppState *st, const char *label,
 #define DISPLAY_NORMAL_OFF 119          /* start of the normal screen in that module */
 #define SCREEN_BYTES       800
 #define SCREEN_CHUNK       50
-#define SCREEN_ZOOM        4
+#define SCREEN_ZOOM        3
 
 typedef struct {
     GtkWidget *window, *area, *status;
@@ -2786,16 +2786,100 @@ static gboolean screen_read(ScreenState *s) {
     return TRUE;
 }
 
+/* The NXT brick, drawn with cairo (logical size 380 x 520); the LCD sits at LCD_X, LCD_Y. */
+#define BRICK_W 380
+#define BRICK_H 440
+#define LCD_X   40
+#define LCD_Y   46
+
+/* Keys in the order of the NXT button values: left, enter, right, exit. */
+static const struct { double x, y, w, h; } SCREEN_KEYS[4] = {
+    { 44, 284, 60, 56 }, { 154, 278, 72, 66 }, { 276, 284, 60, 56 }, { 160, 358, 60, 30 },
+};
+
+static void screen_rrect(cairo_t *cr, double x, double y, double w, double h, double r) {
+    cairo_new_sub_path(cr);
+    cairo_arc(cr, x + w - r, y + r, r, -G_PI / 2, 0);
+    cairo_arc(cr, x + w - r, y + h - r, r, 0, G_PI / 2);
+    cairo_arc(cr, x + r, y + h - r, r, G_PI / 2, G_PI);
+    cairo_arc(cr, x + r, y + r, r, G_PI, 3 * G_PI / 2);
+    cairo_close_path(cr);
+}
+
 static void screen_draw(GtkDrawingArea *area, cairo_t *cr, int w, int h, gpointer data) {
     ScreenState *s = data;
+
+    /* body: light gray, with a darker strip on top for the port letters */
+    cairo_pattern_t *p = cairo_pattern_create_linear(0, 0, 0, BRICK_H);
+    cairo_pattern_add_color_stop_rgb(p, 0, 0.96, 0.96, 0.96);
+    cairo_pattern_add_color_stop_rgb(p, 1, 0.86, 0.86, 0.86);
+    screen_rrect(cr, 1, 1, BRICK_W - 2, BRICK_H - 2, 24);
+    cairo_set_source(cr, p);
+    cairo_fill_preserve(cr);
+    cairo_pattern_destroy(p);
+    cairo_set_source_rgb(cr, 0.70, 0.70, 0.70);
+    cairo_set_line_width(cr, 1.5);
+    cairo_stroke(cr);
+    cairo_set_source_rgb(cr, 0.80, 0.80, 0.80);
+    screen_rrect(cr, 2, 2, BRICK_W - 4, 30, 22);
+    cairo_fill(cr);
+    cairo_rectangle(cr, 2, 17, BRICK_W - 4, 15);
+    cairo_fill(cr);
+    cairo_set_source_rgb(cr, 0.42, 0.42, 0.42);
+    cairo_select_font_face(cr, "sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+    cairo_set_font_size(cr, 12);
+    const char *ports[3] = { "A", "B", "C" };
+    for (int i = 0; i < 3; i++) {
+        cairo_move_to(cr, 70 + i * 60, 23);
+        cairo_show_text(cr, ports[i]);
+    }
+    cairo_move_to(cr, 300, 23);
+    cairo_show_text(cr, "USB");
+
+    /* LCD: dark bezel, then the 100 x 64 screen */
+    cairo_set_source_rgb(cr, 0.15, 0.15, 0.15);
+    screen_rrect(cr, LCD_X - 8, LCD_Y - 8, 100 * SCREEN_ZOOM + 16, 64 * SCREEN_ZOOM + 16, 8);
+    cairo_fill(cr);
     cairo_set_source_rgb(cr, 0.78, 0.84, 0.72);          /* LCD background */
-    cairo_paint(cr);
+    cairo_rectangle(cr, LCD_X, LCD_Y, 100 * SCREEN_ZOOM, 64 * SCREEN_ZOOM);
+    cairo_fill(cr);
     cairo_set_source_rgb(cr, 0.05, 0.08, 0.05);          /* ink */
     for (int y = 0; y < 64; y++)
         for (int x = 0; x < 100; x++)
             if (screen_pixel(s->buf, x, y))
-                cairo_rectangle(cr, x * SCREEN_ZOOM, y * SCREEN_ZOOM, SCREEN_ZOOM, SCREEN_ZOOM);
+                cairo_rectangle(cr, LCD_X + x * SCREEN_ZOOM, LCD_Y + y * SCREEN_ZOOM,
+                                SCREEN_ZOOM, SCREEN_ZOOM);
     cairo_fill(cr);
+
+    /* keys: gray arrows, orange Enter, gray Exit (darker while pressed) */
+    for (int i = 0; i < 4; i++) {
+        double x = SCREEN_KEYS[i].x, y = SCREEN_KEYS[i].y;
+        double kw = SCREEN_KEYS[i].w, kh = SCREEN_KEYS[i].h;
+        double k = s->held == i + 1 ? 0.8 : 1.0;
+        if (i == 1) {
+            cairo_set_source_rgb(cr, 0.96 * k, 0.54 * k, 0.12 * k);
+            screen_rrect(cr, x, y, kw, kh, 12);
+        } else if (i == 3) {
+            cairo_set_source_rgb(cr, 0.68 * k, 0.68 * k, 0.68 * k);
+            screen_rrect(cr, x, y, kw, kh, 8);
+        } else {                                         /* triangle, corners rounded by the stroke */
+            cairo_set_source_rgb(cr, 0.77 * k, 0.77 * k, 0.77 * k);
+            cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+            if (i == 0) {
+                cairo_move_to(cr, x + 3, y + kh / 2);
+                cairo_line_to(cr, x + kw - 3, y + 3);
+                cairo_line_to(cr, x + kw - 3, y + kh - 3);
+            } else {
+                cairo_move_to(cr, x + kw - 3, y + kh / 2);
+                cairo_line_to(cr, x + 3, y + 3);
+                cairo_line_to(cr, x + 3, y + kh - 3);
+            }
+            cairo_close_path(cr);
+            cairo_set_line_width(cr, 6);
+            cairo_stroke_preserve(cr);
+        }
+        cairo_fill(cr);
+    }
 }
 
 static void screen_stop(ScreenState *s) {
@@ -2852,6 +2936,7 @@ static void screen_send_button(ScreenState *s, guint8 value) {
 static void screen_press(ScreenState *s, guint8 btn) {
     if (s->held) return;                                /* key repeat or a second button */
     s->held = btn;
+    gtk_widget_queue_draw(s->area);
     screen_send_button(s, btn);
 }
 
@@ -2859,31 +2944,19 @@ static void screen_release(ScreenState *s) {
     if (!s->held) return;
     guint8 btn = s->held;
     s->held = 0;
+    gtk_widget_queue_draw(s->area);
     screen_send_button(s, btn + 8);
 }
 
-static void screen_btn_pressed(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {
-    gtk_gesture_set_state(GTK_GESTURE(g), GTK_EVENT_SEQUENCE_CLAIMED);   /* like the Remote */
-    GtkWidget *w = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(g));
-    screen_press(data, GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(w), "btn")));
+static void screen_area_pressed(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {
+    for (int i = 0; i < 4; i++)
+        if (x >= SCREEN_KEYS[i].x && x < SCREEN_KEYS[i].x + SCREEN_KEYS[i].w &&
+            y >= SCREEN_KEYS[i].y && y < SCREEN_KEYS[i].y + SCREEN_KEYS[i].h)
+            screen_press(data, i + 1);
 }
 
-static void screen_btn_released(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {
+static void screen_area_released(GtkGestureClick *g, gint n, gdouble x, gdouble y, gpointer data) {
     screen_release(data);
-}
-
-static void screen_noop(GtkButton *b, gpointer data) { }
-
-static GtkWidget *screen_button(ScreenState *s, const char *label, const char *css, guint btn) {
-    GtkWidget *b = chip_button(label, css, G_CALLBACK(screen_noop), s);
-    g_object_set_data(G_OBJECT(b), "btn", GUINT_TO_POINTER(btn));
-    GtkGesture *g = gtk_gesture_click_new();
-    gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(g), GTK_PHASE_CAPTURE);
-    g_signal_connect(g, "pressed", G_CALLBACK(screen_btn_pressed), s);
-    g_signal_connect(g, "released", G_CALLBACK(screen_btn_released), s);
-    g_signal_connect(g, "cancel", G_CALLBACK(screen_btn_released), s);
-    gtk_widget_add_controller(b, GTK_EVENT_CONTROLLER(g));
-    return b;
 }
 
 /* Keyboard: arrows, Return and Esc act like the NXT buttons. */
@@ -2930,18 +3003,16 @@ static void open_screen_cb(GtkButton *btn, gpointer user_data) {
     gtk_window_set_child(GTK_WINDOW(s->window), box);
 
     s->area = gtk_drawing_area_new();
-    gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(s->area), 100 * SCREEN_ZOOM);
-    gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(s->area), 64 * SCREEN_ZOOM);
+    gtk_widget_set_halign(s->area, GTK_ALIGN_CENTER);      /* keeps clicks 1:1 with the drawing */
+    gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(s->area), BRICK_W);
+    gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(s->area), BRICK_H);
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(s->area), screen_draw, s, NULL);
+    GtkGesture *click = gtk_gesture_click_new();
+    g_signal_connect(click, "pressed", G_CALLBACK(screen_area_pressed), s);
+    g_signal_connect(click, "released", G_CALLBACK(screen_area_released), s);
+    g_signal_connect(click, "cancel", G_CALLBACK(screen_area_released), s);
+    gtk_widget_add_controller(s->area, GTK_EVENT_CONTROLLER(click));
     gtk_box_append(GTK_BOX(box), s->area);
-
-    GtkWidget *keys = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    gtk_widget_set_halign(keys, GTK_ALIGN_CENTER);
-    gtk_box_append(GTK_BOX(keys), screen_button(s, "◀", "qa-blue", 1));
-    gtk_box_append(GTK_BOX(keys), screen_button(s, "Enter", "qa-orange", 2));
-    gtk_box_append(GTK_BOX(keys), screen_button(s, "▶", "qa-blue", 3));
-    gtk_box_append(GTK_BOX(keys), screen_button(s, "Exit", "qa-pink", 4));
-    gtk_box_append(GTK_BOX(box), keys);
 
     GtkEventController *kc = gtk_event_controller_key_new();
     gtk_event_controller_set_propagation_phase(kc, GTK_PHASE_CAPTURE);
